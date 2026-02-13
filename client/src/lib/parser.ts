@@ -197,20 +197,33 @@ export function isTaskOverdue(dateStr: string): boolean {
 }
 
 export function parseMultipleCommands(input: string, startId: number): CommandResult[] {
-  // Split by keywords "nueva tarea", "otra tarea", "punto nueva tarea", etc.
-  // We use a regex with capturing group to keep the delimiter if needed, but here we just want to split.
-  // We'll split by "nueva tarea" or "otra tarea" case insensitive.
+  // 1. Normalize "punto" to "." to handle dictation oddities
+  // "comprar pan punto nueva tarea" -> "comprar pan . nueva tarea"
+  let normalized = input.replace(/\s+punto\s+/gi, '. ');
   
-  const parts = input.split(/\s+(?:nueva|otra)\s+tarea\s+/i);
+  // 2. Split by explicit separators
+  // Separators: 
+  // - "nueva/otra/proxima/siguiente tarea"
+  // - "." (dot) which might come from "punto" normalization or typing
+  // - "y ademas", "y tambien" (optional, but helpful)
+  
+  const separatorRegex = /(?:[\s.]|^)(?:nueva|otra|proxima|siguiente)\s+tarea(?:[\s.]|$)|[.]\s+|(?:\s|^)y\s+(?:ademas|tambien)(?:\s|$)/i;
+  
+  const parts = normalized.split(separatorRegex);
   
   const results: CommandResult[] = [];
   let currentId = startId;
 
   parts.forEach(part => {
       const trimmed = part.trim();
-      if (!trimmed) return;
+      // Filter out empty or very short garbage parts
+      if (!trimmed || trimmed.length < 3) return;
       
       const result = parseCommand(trimmed, currentId);
+      
+      // Filter out "unknown" if it's likely just noise from splitting?
+      // No, let's keep it but maybe the user will see error for noise.
+      
       results.push(result);
       
       // Only increment ID if we actually created a task

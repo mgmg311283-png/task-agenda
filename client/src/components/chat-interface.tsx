@@ -98,7 +98,7 @@ export function ChatInterface() {
                      addMessage('system', result.message || 'No entendí ese comando.', 'error');
                 }
             } else if (result.action === 'help') {
-                addMessage('system', `💡 Comandos: \n- "Comprar leche mañana"\n- "Urgente llamar a Juan"\n- "Separador: 'nueva tarea'"`, 'info');
+                addMessage('system', `💡 Puedes separar tareas diciendo:\n- "punto"\n- "nueva tarea"\n- "y también"\nEj: "Comprar pan punto llamar a Juan"`, 'info');
             }
         });
 
