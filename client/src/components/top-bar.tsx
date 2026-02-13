@@ -53,17 +53,26 @@ export function TopBar() {
         header: true,
         skipEmptyLines: true,
         complete: (results) => {
-            const tasks: Task[] = results.data.map((row: any) => ({
-                id: 0, // Will be overwritten by reducer
-                date: row.FECHA || 'a definir',
-                text: row.TAREA || 'Sin título',
-                person: row.PERSONA || 'a definir',
-                type: (['accion', 'para_pensar'].includes(row.TIPO) ? row.TIPO : 'a_definir') as any,
-                urgent: row.URGENTE === 'urgente',
-                status: 'activa' as TaskStatus,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
-            })).filter((t: any) => t.text); // Filter empty rows
+            const tasks: Task[] = results.data.map((row: any) => {
+                let type: any = 'a_definir';
+                const rowType = row.TIPO ? row.TIPO.toLowerCase().trim() : '';
+                
+                if (rowType === 'accion' || rowType === 'acción') type = 'accion';
+                else if (rowType === 'para_pensar' || rowType === 'para pensar' || rowType === 'pensar') type = 'para_pensar';
+                else if (rowType === 'a_definir' || rowType === 'a definir') type = 'a_definir';
+
+                return {
+                    id: 0, // Will be overwritten by reducer
+                    date: row.FECHA || 'a definir',
+                    text: row.TAREA || 'Sin título',
+                    person: row.PERSONA || 'a definir',
+                    type: type,
+                    urgent: row.URGENTE === 'urgente',
+                    status: 'activa' as TaskStatus,
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
+                };
+            }).filter((t: any) => t.text); // Filter empty rows
 
             if (tasks.length > 0) {
                 dispatch({ type: 'IMPORT_CSV', payload: tasks, source: 'Import' });
