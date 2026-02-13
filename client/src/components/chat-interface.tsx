@@ -26,6 +26,7 @@ export function ChatInterface() {
   const { state, dispatch } = useTasks();
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<any>(null);
 
   // Auto-scroll to bottom of chat
   useEffect(() => {
@@ -82,6 +83,12 @@ export function ChatInterface() {
     e?.preventDefault();
     if (!input.trim()) return;
 
+    // Stop listening if we submit while listening
+    if (isListening && recognitionRef.current) {
+        recognitionRef.current.stop();
+        setIsListening(false);
+    }
+
     const userText = input;
     setInput('');
     addMessage('user', userText);
@@ -92,38 +99,63 @@ export function ChatInterface() {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     
     if (SpeechRecognition) {
+        // If already listening, stop it manually (Manual Stop)
         if (isListening) {
+            if (recognitionRef.current) {
+                recognitionRef.current.stop();
+            }
             setIsListening(false);
+            inputRef.current?.focus();
             return;
         }
 
         const recognition = new SpeechRecognition();
         recognition.lang = 'es-AR';
-        recognition.interimResults = false;
+        recognition.continuous = true; // Key change: Keep listening until stopped manually
+        recognition.interimResults = true; // Key change: Show text as you speak
         recognition.maxAlternatives = 1;
+        
+        recognitionRef.current = recognition;
 
         setIsListening(true);
         // toast({ title: "Escuchando...", description: "Habla ahora..." });
 
+        let finalTranscript = '';
+
         recognition.onresult = (event: any) => {
-            const transcript = event.results[0][0].transcript;
-            setInput(transcript);
-            setIsListening(false);
-            inputRef.current?.focus();
+            let interimTranscript = '';
             
-            // Auto submit? Or let user confirm? 
-            // User requested: "Mostrar la transcripción antes de ejecutar... con botón Confirmar"
-            // So we just setInput and let them hit enter.
+            // Reconstruct transcript from all results
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    finalTranscript += event.results[i][0].transcript;
+                } else {
+                    interimTranscript += event.results[i][0].transcript;
+                }
+            }
+            
+            // If we have previous input (user typed something then started speaking), preserve it?
+            // For simplicity, let's just overwrite or append. 
+            // Better UX: Append to current input if it's the first result, but continuous overwrites might be tricky.
+            // Simplest robust way: Just show what's being spoken now.
+            setInput(finalTranscript + interimTranscript);
         };
 
         recognition.onerror = (event: any) => {
             console.error(event.error);
             setIsListening(false);
-            addMessage('system', '❌ Error al escuchar el audio.', 'error');
+            if (event.error !== 'aborted') {
+                addMessage('system', '❌ Error al escuchar el audio.', 'error');
+            }
         };
 
         recognition.onend = () => {
-            setIsListening(false);
+            // Only update state if we didn't manually stop it (e.g. timeout or silence)
+            // But since we want manual control, we just sync state.
+            // If it stopped by itself, we update UI.
+            if (isListening) {
+                 setIsListening(false);
+            }
         };
 
         recognition.start();
