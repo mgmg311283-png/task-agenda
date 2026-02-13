@@ -139,14 +139,22 @@ export function TopBar() {
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle>Importar Tareas (CSV)</DialogTitle>
-                        <DialogDescription>
-                            Pega el contenido de tu CSV aquí. Asegúrate de incluir los encabezados: FECHA, TAREA, PERSONA, TIPO, URGENTE.
+                        <DialogDescription className="space-y-2">
+                            <p>Copia y pega tus tareas desde Excel o Sheets. El sistema es flexible, pero intenta seguir este orden de columnas para mejor resultado:</p>
+                            <div className="bg-muted p-2 rounded text-xs font-mono border border-border">
+                                FECHA, TAREA, PERSONA, TIPO, URGENTE
+                            </div>
+                            <ul className="text-xs list-disc list-inside text-muted-foreground">
+                                <li><strong>FECHA:</strong> dd/mm/yy o "a definir"</li>
+                                <li><strong>TIPO:</strong> "accion", "pensar" o "a definir"</li>
+                                <li><strong>URGENTE:</strong> "urgente" o dejar vacío</li>
+                            </ul>
                         </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                         <Textarea 
-                            placeholder={`FECHA,NUMERO,TAREA,PERSONA,TIPO,URGENTE\n12/03/24,,Comprar pan,Mariano,accion,`}
-                            className="h-[200px] font-mono text-xs"
+                            placeholder={`Ejemplo de formato:\n\n12/03/24, Comprar pan, Mariano, accion,\n, Llamar a proveedor, Aldana, accion, urgente\na definir, Pensar estrategia, Yo, pensar,`}
+                            className="h-[200px] font-mono text-xs leading-relaxed"
                             value={csvContent}
                             onChange={(e) => setCsvContent(e.target.value)}
                         />
