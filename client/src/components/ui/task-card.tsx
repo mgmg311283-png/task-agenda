@@ -3,7 +3,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Check, Trash2, ArrowRightLeft, Pencil } from "lucide-react";
+import { Check, Trash2, ArrowRightLeft, Pencil, CalendarIcon } from "lucide-react";
 import { Task } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useState } from 'react';
@@ -13,12 +13,35 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { es } from "react-day-picker/locale";
 
 interface TaskCardProps {
   task: Task;
   onComplete: (id: number) => void;
   onDelete: (id: number) => void;
   onUpdate: (id: number, data: Partial<Task>) => void;
+}
+
+function parseDateStr(dateStr: string): Date | undefined {
+  if (!dateStr || dateStr === 'a definir') return undefined;
+  const parts = dateStr.split('/');
+  if (parts.length === 3) {
+    const day = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    let year = parseInt(parts[2], 10);
+    if (year < 100) year += 2000;
+    return new Date(year, month, day);
+  }
+  return undefined;
+}
+
+function formatDate(date: Date): string {
+  const d = String(date.getDate()).padStart(2, '0');
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const y = String(date.getFullYear()).slice(-2);
+  return `${d}/${m}/${y}`;
 }
 
 function getColumnForTask(task: Task): string {
@@ -50,7 +73,7 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps
   };
 
   const [isEditingText, setIsEditingText] = useState(false);
-  const [isEditingDate, setIsEditingDate] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const currentColumn = getColumnForTask(task);
 
   return (
@@ -162,41 +185,42 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps
                     {task.person}
                 </Badge>
              </div>
-             {isEditingDate ? (
-                <input
-                    className="font-mono tracking-tight text-xs bg-transparent border-b border-dashed border-gray-400 focus:outline-none w-24 text-right"
-                    defaultValue={task.date}
-                    autoFocus
-                    placeholder="dd/mm/yy"
-                    data-testid={`input-date-${task.id}`}
-                    onClick={(e) => e.stopPropagation()}
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onBlur={(e) => {
-                        setIsEditingDate(false);
-                        const val = e.target.value.trim();
-                        if (val && val !== task.date) {
-                            onUpdate(task.id, { date: val });
-                        }
-                    }}
-                    onKeyDown={(e) => {
-                        if (e.key === 'Enter') e.currentTarget.blur();
-                        if (e.key === 'Escape') { setIsEditingDate(false); }
-                    }}
-                />
-             ) : (
-                <span
+             <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                <PopoverTrigger asChild>
+                  <button
                     className={cn(
-                        "font-mono tracking-tight cursor-text group/date",
+                        "font-mono tracking-tight text-xs flex items-center gap-1 cursor-pointer hover:text-foreground transition-colors group/date",
                         task.date === 'a definir' ? "text-gray-400 italic" : "text-gray-600"
                     )}
-                    onClick={(e) => { e.stopPropagation(); setIsEditingDate(true); }}
+                    onClick={(e) => e.stopPropagation()}
                     onPointerDown={(e) => e.stopPropagation()}
                     data-testid={`text-date-${task.id}`}
-                >
+                  >
                     {task.date}
-                    <Pencil className="inline-block w-2.5 h-2.5 ml-1 text-gray-300 md:opacity-0 md:group-hover/date:opacity-100 transition-opacity align-text-bottom" />
-                </span>
-             )}
+                    <CalendarIcon className="w-3 h-3 text-gray-300 md:opacity-0 md:group-hover/date:opacity-100 transition-opacity" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  className="w-auto p-0"
+                  align="end"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Calendar
+                    mode="single"
+                    locale={es}
+                    selected={parseDateStr(task.date)}
+                    defaultMonth={parseDateStr(task.date) || new Date()}
+                    onSelect={(date) => {
+                      if (date) {
+                        onUpdate(task.id, { date: formatDate(date) });
+                      }
+                      setCalendarOpen(false);
+                    }}
+                    data-testid={`calendar-${task.id}`}
+                  />
+                </PopoverContent>
+              </Popover>
           </div>
         </CardContent>
       </Card>
