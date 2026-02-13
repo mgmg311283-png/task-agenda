@@ -197,15 +197,30 @@ export function isTaskOverdue(dateStr: string): boolean {
 }
 
 export function parseMultipleCommands(input: string, startId: number): CommandResult[] {
-  // 1. Normalize "punto" to "." to handle dictation oddities
-  // "comprar pan punto nueva tarea" -> "comprar pan . nueva tarea"
-  let normalized = input.replace(/\s+punto\s+/gi, '. ');
+  // 1. Aggressive Normalization for Speech-to-Text Glitches
+  // Fix "puntonueva", "puntootra", "yademas", etc.
+  let normalized = input
+    .replace(/puntonueva/gi, '. nueva')
+    .replace(/puntootra/gi, '. otra')
+    .replace(/puntoproxima/gi, '. proxima')
+    .replace(/puntosiguiente/gi, '. siguiente')
+    .replace(/yademas/gi, 'y ademas')
+    .replace(/ytambien/gi, 'y tambien');
+
+  // 2. Normalize "punto" to "." generally if it looks like a separator
+  // "comprar pan punto llamar a Juan" -> "comprar pan . llamar a Juan"
+  normalized = normalized.replace(/\s+punto\s+/gi, '. ');
   
-  // 2. Split by explicit separators
+  // 3. Handle case where "punto" might be stuck to the *previous* word too, though less common in this specific way
+  // But definitely handle "punto" at end of sentences if speech engine writes it as word
+  normalized = normalized.replace(/\s+punto$/gi, '.');
+
+  // 4. Split by explicit separators
   // Separators: 
   // - "nueva/otra/proxima/siguiente tarea"
-  // - "." (dot) which might come from "punto" normalization or typing
-  // - "y ademas", "y tambien" (optional, but helpful)
+  // - "." (dot)
+  // - "y ademas", "y tambien"
+  // - Also just "nueva tarea" in the middle of text even without dot
   
   const separatorRegex = /(?:[\s.]|^)(?:nueva|otra|proxima|siguiente)\s+tarea(?:[\s.]|$)|[.]\s+|(?:\s|^)y\s+(?:ademas|tambien)(?:\s|$)/i;
   
@@ -217,12 +232,9 @@ export function parseMultipleCommands(input: string, startId: number): CommandRe
   parts.forEach(part => {
       const trimmed = part.trim();
       // Filter out empty or very short garbage parts
-      if (!trimmed || trimmed.length < 3) return;
+      if (!trimmed || trimmed.length < 2) return;
       
       const result = parseCommand(trimmed, currentId);
-      
-      // Filter out "unknown" if it's likely just noise from splitting?
-      // No, let's keep it but maybe the user will see error for noise.
       
       results.push(result);
       
