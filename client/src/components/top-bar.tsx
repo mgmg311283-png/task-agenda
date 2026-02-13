@@ -1,13 +1,27 @@
 import { Button } from "@/components/ui/button";
-import { Download, Upload, Trash, CalendarClock, History, BarChart3 } from "lucide-react";
+import { Download, Upload, Trash, CalendarClock, History, BarChart3, X } from "lucide-react";
 import { useTasks } from "@/lib/task-context";
 import { Link } from "wouter";
 import Papa from 'papaparse';
 import { toast } from "@/hooks/use-toast";
 import { Task, TaskStatus } from "@/lib/types";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogClose
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { useState } from "react";
 
 export function TopBar() {
   const { state, dispatch } = useTasks();
+  const [csvContent, setCsvContent] = useState("");
+  const [isImportOpen, setIsImportOpen] = useState(false);
 
   const handleExport = () => {
     // FECHA,NUMERO,TAREA,PERSONA,TIPO,URGENTE
@@ -32,12 +46,12 @@ export function TopBar() {
     document.body.removeChild(link);
   };
 
-  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handlePasteImport = () => {
+    if (!csvContent.trim()) return;
 
-    Papa.parse(file, {
+    Papa.parse(csvContent, {
         header: true,
+        skipEmptyLines: true,
         complete: (results) => {
             const tasks: Task[] = results.data.map((row: any) => ({
                 id: 0, // Will be overwritten by reducer
@@ -51,8 +65,17 @@ export function TopBar() {
                 updatedAt: new Date().toISOString()
             })).filter((t: any) => t.text); // Filter empty rows
 
-            dispatch({ type: 'IMPORT_CSV', payload: tasks, source: 'Import' });
-            toast({ title: "Importación exitosa", description: `${tasks.length} tareas agregadas` });
+            if (tasks.length > 0) {
+                dispatch({ type: 'IMPORT_CSV', payload: tasks, source: 'Import' });
+                toast({ title: "Importación exitosa", description: `${tasks.length} tareas agregadas` });
+                setIsImportOpen(false);
+                setCsvContent("");
+            } else {
+                toast({ variant: "destructive", title: "Error", description: "No se encontraron tareas válidas en el texto pegado." });
+            }
+        },
+        error: (err: any) => {
+             toast({ variant: "destructive", title: "Error al parsear", description: err.message });
         }
     });
   };
@@ -98,17 +121,37 @@ export function TopBar() {
                 <Download className="w-4 h-4" />
             </Button>
             
-            <div className="relative">
-                <Button variant="ghost" size="icon" className="h-8 w-8" title="Importar CSV">
-                    <Upload className="w-4 h-4" />
-                </Button>
-                <input 
-                    type="file" 
-                    accept=".csv" 
-                    className="absolute inset-0 opacity-0 cursor-pointer" 
-                    onChange={handleImport}
-                />
-            </div>
+            <Dialog open={isImportOpen} onOpenChange={setIsImportOpen}>
+                <DialogTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Importar (Pegar CSV)">
+                        <Upload className="w-4 h-4" />
+                    </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Importar Tareas (CSV)</DialogTitle>
+                        <DialogDescription>
+                            Pega el contenido de tu CSV aquí. Asegúrate de incluir los encabezados: FECHA, TAREA, PERSONA, TIPO, URGENTE.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <Textarea 
+                            placeholder={`FECHA,NUMERO,TAREA,PERSONA,TIPO,URGENTE\n12/03/24,,Comprar pan,Mariano,accion,`}
+                            className="h-[200px] font-mono text-xs"
+                            value={csvContent}
+                            onChange={(e) => setCsvContent(e.target.value)}
+                        />
+                    </div>
+                    <DialogFooter className="sm:justify-between">
+                         <Button type="button" variant="secondary" onClick={() => setIsImportOpen(false)}>
+                            Cancelar
+                        </Button>
+                        <Button type="button" onClick={handlePasteImport} disabled={!csvContent.trim()}>
+                            Importar Tareas
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
             
             <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50" title="Eliminar todas activas" onClick={() => {
                 if(confirm("¿Seguro que quieres eliminar TODAS las tareas activas?")) {
