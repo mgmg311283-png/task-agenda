@@ -25,10 +25,10 @@ export function KanbanColumn({ id, title, tasks, color, onComplete, onDelete, on
   };
 
   return (
-    <div className="flex flex-col h-full min-w-[300px] md:min-w-[0] md:flex-1 border-r last:border-r-0 md:border-r-1 border-border bg-white shadow-sm">
-      {/* Header */}
+    <div className="flex flex-col h-full w-full md:min-w-[0] md:flex-1 border-r last:border-r-0 md:border-r-1 border-border bg-white shadow-sm">
+      {/* Header - hidden on mobile since tabs handle it */}
       <div className={cn(
-        "px-4 py-3 border-b flex justify-between items-center sticky top-0 z-10 font-mono tracking-tight shadow-sm",
+        "px-4 py-3 border-b hidden md:flex justify-between items-center sticky top-0 z-10 font-mono tracking-tight shadow-sm",
         colorStyles[color]
       )}>
         <h3 className="font-bold text-sm uppercase flex items-center gap-2">
