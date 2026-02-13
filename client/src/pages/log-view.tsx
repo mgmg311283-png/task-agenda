@@ -35,7 +35,7 @@ export function LogView() {
               <p className="text-gray-800">{log.details}</p>
               {log.newValues && (
                 <div className="mt-1 text-xs text-gray-500 bg-gray-100 p-1 inline-block">
-                    {JSON.stringify(log.newValues).substring(0, 100)}...
+                    {String(log.newValues).substring(0, 100)}...
                 </div>
               )}
             </div>

@@ -7,9 +7,10 @@ import { isTaskOverdue } from "@/lib/parser";
 
 export function MetricsView() {
   const { state } = useTasks();
-  const activeTasks = state.tasks.filter(t => t.status === 'activa');
-  const completedTasks = state.tasks.filter(t => t.status === 'completada');
-  const deletedTasks = state.tasks.filter(t => t.status === 'eliminada');
+  const allTasks = state.allTasks || state.tasks;
+  const activeTasks = allTasks.filter(t => t.status === 'activa');
+  const completedTasks = allTasks.filter(t => t.status === 'completada');
+  const deletedTasks = allTasks.filter(t => t.status === 'eliminada');
   const overdueTasks = activeTasks.filter(t => isTaskOverdue(t.date));
 
   return (

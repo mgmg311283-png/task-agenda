@@ -1,229 +1,149 @@
-import React, { createContext, useContext, useEffect, useReducer, ReactNode } from 'react';
-import { Task, LogEntry, TaskStatus, TaskType } from './types';
-import { format, parse, isValid, isBefore, startOfDay } from 'date-fns';
+import React, { createContext, useContext, useCallback, ReactNode } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiRequest } from './queryClient';
+import { Task, LogEntry } from './types';
 
-interface State {
-  tasks: Task[];
-  logs: LogEntry[];
-  lastId: number;
+interface TaskContextValue {
+  state: {
+    tasks: Task[];
+    allTasks: Task[];
+    logs: LogEntry[];
+    lastId: number;
+    isLoading: boolean;
+  };
+  dispatch: (action: Action) => void;
 }
 
 type Action =
-  | { type: 'LOAD_STATE'; payload: State }
-  | { type: 'ADD_TASK'; payload: Task; source: LogEntry['source'] }
-  | { type: 'UPDATE_TASK'; payload: { id: number; updates: Partial<Task> }; source: LogEntry['source'] }
-  | { type: 'DELETE_TASK'; payload: { id: number }; source: LogEntry['source'] }
-  | { type: 'COMPLETE_TASK'; payload: { id: number }; source: LogEntry['source'] }
-  | { type: 'MOVE_EXPIRED'; source: LogEntry['source'] }
-  | { type: 'IMPORT_CSV'; payload: Task[]; source: LogEntry['source'] }
-  | { type: 'DELETE_ALL_ACTIVE'; source: LogEntry['source'] };
+  | { type: 'ADD_TASK'; payload: Partial<Task>; source: string }
+  | { type: 'UPDATE_TASK'; payload: { id: number; updates: Partial<Task> }; source: string }
+  | { type: 'DELETE_TASK'; payload: { id: number }; source: string }
+  | { type: 'COMPLETE_TASK'; payload: { id: number }; source: string }
+  | { type: 'MOVE_EXPIRED'; source: string }
+  | { type: 'IMPORT_CSV'; payload: Partial<Task>[]; source: string }
+  | { type: 'DELETE_ALL_ACTIVE'; source: string };
 
-const initialState: State = {
-  tasks: [],
-  logs: [],
-  lastId: 0,
-};
-
-function reducer(state: State, action: Action): State {
-  const timestamp = new Date().toISOString();
-
-  switch (action.type) {
-    case 'LOAD_STATE':
-      return action.payload;
-
-    case 'ADD_TASK': {
-      const log: LogEntry = {
-        id: crypto.randomUUID(),
-        timestamp,
-        action: 'CREATE',
-        details: `Created task ${action.payload.id}`,
-        taskId: action.payload.id,
-        newValues: action.payload,
-        source: action.source,
-      };
-      return {
-        ...state,
-        tasks: [...state.tasks, action.payload],
-        logs: [log, ...state.logs],
-        lastId: Math.max(state.lastId, action.payload.id),
-      };
-    }
-
-    case 'UPDATE_TASK': {
-      const task = state.tasks.find((t) => t.id === action.payload.id);
-      if (!task) return state;
-      const updatedTask = { ...task, ...action.payload.updates, updatedAt: timestamp };
-      
-      const log: LogEntry = {
-        id: crypto.randomUUID(),
-        timestamp,
-        action: 'UPDATE',
-        details: `Updated task ${task.id}`,
-        taskId: task.id,
-        originalValues: task,
-        newValues: updatedTask,
-        source: action.source,
-      };
-
-      return {
-        ...state,
-        tasks: state.tasks.map((t) => (t.id === action.payload.id ? updatedTask : t)),
-        logs: [log, ...state.logs],
-      };
-    }
-
-    case 'DELETE_TASK': {
-      const task = state.tasks.find((t) => t.id === action.payload.id);
-      if (!task) return state;
-      const updatedTask: Task = { ...task, status: 'eliminada', updatedAt: timestamp };
-
-      const log: LogEntry = {
-        id: crypto.randomUUID(),
-        timestamp,
-        action: 'DELETE',
-        details: `Deleted task ${task.id}`,
-        taskId: task.id,
-        source: action.source,
-      };
-
-      return {
-        ...state,
-        tasks: state.tasks.map((t) => (t.id === action.payload.id ? updatedTask : t)),
-        logs: [log, ...state.logs],
-      };
-    }
-
-    case 'COMPLETE_TASK': {
-        const task = state.tasks.find((t) => t.id === action.payload.id);
-        if (!task) return state;
-        const updatedTask: Task = { ...task, status: 'completada', updatedAt: timestamp };
-  
-        const log: LogEntry = {
-          id: crypto.randomUUID(),
-          timestamp,
-          action: 'COMPLETE',
-          details: `Completed task ${task.id}`,
-          taskId: task.id,
-          source: action.source,
-        };
-  
-        return {
-          ...state,
-          tasks: state.tasks.map((t) => (t.id === action.payload.id ? updatedTask : t)),
-          logs: [log, ...state.logs],
-        };
-      }
-
-    case 'MOVE_EXPIRED': {
-      const today = startOfDay(new Date());
-      const todayStr = format(today, 'dd/MM/yy');
-      
-      const updatedTasks = state.tasks.map(t => {
-          if (t.status !== 'activa' || t.date === 'a definir') return t;
-          
-          try {
-             const taskDate = parse(t.date, 'dd/MM/yy', new Date());
-             if (isValid(taskDate) && isBefore(taskDate, today)) {
-                 return { ...t, date: todayStr, updatedAt: timestamp };
-             }
-          } catch(e) {
-              // ignore invalid dates
-          }
-          return t;
-      });
-
-      // Count changes
-      const changedCount = updatedTasks.filter((t, i) => t.date !== state.tasks[i].date).length;
-      
-      if (changedCount === 0) return state;
-
-      const log: LogEntry = {
-          id: crypto.randomUUID(),
-          timestamp,
-          action: 'MOVE_EXPIRED',
-          details: `Moved ${changedCount} expired tasks to today`,
-          source: action.source,
-      };
-
-      return {
-        ...state,
-        tasks: updatedTasks,
-        logs: [log, ...state.logs]
-      };
-    }
-
-    case 'IMPORT_CSV': {
-      let currentId = state.lastId;
-      const newTasks = action.payload.map(t => {
-        currentId++;
-        return { ...t, id: currentId };
-      });
-
-      const log: LogEntry = {
-         id: crypto.randomUUID(),
-         timestamp,
-         action: 'IMPORT',
-         details: `Imported ${newTasks.length} tasks`,
-         source: action.source
-      };
-
-      return {
-        ...state,
-        tasks: [...state.tasks, ...newTasks],
-        logs: [log, ...state.logs],
-        lastId: currentId
-      };
-    }
-    
-    case 'DELETE_ALL_ACTIVE': {
-        const activeTasks = state.tasks.filter(t => t.status === 'activa');
-        const updatedTasks = state.tasks.map(t => t.status === 'activa' ? { ...t, status: 'eliminada' as TaskStatus, updatedAt: timestamp } : t);
-        
-        const log: LogEntry = {
-            id: crypto.randomUUID(),
-            timestamp,
-            action: 'DELETE_ALL',
-            details: `Deleted ${activeTasks.length} active tasks`,
-            source: action.source
-        };
-
-        return {
-            ...state,
-            tasks: updatedTasks,
-            logs: [log, ...state.logs]
-        };
-    }
-
-    default:
-      return state;
-  }
-}
-
-const TaskContext = createContext<{
-  state: State;
-  dispatch: React.Dispatch<Action>;
-} | null>(null);
+const TaskContext = createContext<TaskContextValue | null>(null);
 
 export function TaskProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, initialState);
+  const queryClient = useQueryClient();
 
-  // Load from LocalStorage
-  useEffect(() => {
-    const saved = localStorage.getItem('taskmaster-state');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        dispatch({ type: 'LOAD_STATE', payload: parsed });
-      } catch (e) {
-        console.error("Failed to load state", e);
-      }
+  const { data: tasks = [], isLoading: tasksLoading } = useQuery<Task[]>({
+    queryKey: ['/api/tasks'],
+    refetchInterval: 5000,
+    refetchOnWindowFocus: true,
+    staleTime: 2000,
+  });
+
+  const { data: allTasks = [] } = useQuery<Task[]>({
+    queryKey: ['/api/tasks/all'],
+    refetchInterval: 10000,
+    staleTime: 5000,
+  });
+
+  const { data: logs = [] } = useQuery<LogEntry[]>({
+    queryKey: ['/api/logs'],
+    refetchInterval: 10000,
+    staleTime: 5000,
+  });
+
+  const invalidate = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['/api/tasks'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/tasks/all'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/logs'] });
+  }, [queryClient]);
+
+  const createMutation = useMutation({
+    mutationFn: async (data: { task: Partial<Task>; source: string }) => {
+      const res = await apiRequest('POST', '/api/tasks', { ...data.task, source: data.source });
+      return res.json();
+    },
+    onSuccess: invalidate,
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async (data: { id: number; updates: Partial<Task>; source: string }) => {
+      const res = await apiRequest('PATCH', `/api/tasks/${data.id}`, { ...data.updates, source: data.source });
+      return res.json();
+    },
+    onSuccess: invalidate,
+  });
+
+  const completeMutation = useMutation({
+    mutationFn: async (data: { id: number; source: string }) => {
+      const res = await apiRequest('POST', `/api/tasks/${data.id}/complete`, { source: data.source });
+      return res.json();
+    },
+    onSuccess: invalidate,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (data: { id: number; source: string }) => {
+      const res = await apiRequest('POST', `/api/tasks/${data.id}/delete`, { source: data.source });
+      return res.json();
+    },
+    onSuccess: invalidate,
+  });
+
+  const moveExpiredMutation = useMutation({
+    mutationFn: async (data: { source: string }) => {
+      const res = await apiRequest('POST', '/api/tasks/move-expired', { source: data.source });
+      return res.json();
+    },
+    onSuccess: invalidate,
+  });
+
+  const deleteAllMutation = useMutation({
+    mutationFn: async (data: { source: string }) => {
+      const res = await apiRequest('POST', '/api/tasks/delete-all', { source: data.source });
+      return res.json();
+    },
+    onSuccess: invalidate,
+  });
+
+  const importMutation = useMutation({
+    mutationFn: async (data: { tasks: Partial<Task>[]; source: string }) => {
+      const res = await apiRequest('POST', '/api/tasks/import', { tasks: data.tasks });
+      return res.json();
+    },
+    onSuccess: invalidate,
+  });
+
+  const lastId = tasks.length > 0 ? Math.max(...tasks.map(t => t.id)) : 0;
+
+  const dispatch = useCallback((action: Action) => {
+    switch (action.type) {
+      case 'ADD_TASK':
+        createMutation.mutate({ task: action.payload, source: action.source });
+        break;
+      case 'UPDATE_TASK':
+        updateMutation.mutate({ id: action.payload.id, updates: action.payload.updates, source: action.source });
+        break;
+      case 'DELETE_TASK':
+        deleteMutation.mutate({ id: action.payload.id, source: action.source });
+        break;
+      case 'COMPLETE_TASK':
+        completeMutation.mutate({ id: action.payload.id, source: action.source });
+        break;
+      case 'MOVE_EXPIRED':
+        moveExpiredMutation.mutate({ source: action.source });
+        break;
+      case 'IMPORT_CSV':
+        importMutation.mutate({ tasks: action.payload, source: action.source });
+        break;
+      case 'DELETE_ALL_ACTIVE':
+        deleteAllMutation.mutate({ source: action.source });
+        break;
     }
-  }, []);
+  }, [createMutation, updateMutation, deleteMutation, completeMutation, moveExpiredMutation, importMutation, deleteAllMutation]);
 
-  // Save to LocalStorage
-  useEffect(() => {
-    localStorage.setItem('taskmaster-state', JSON.stringify(state));
-  }, [state]);
+  const state = {
+    tasks,
+    allTasks,
+    logs,
+    lastId,
+    isLoading: tasksLoading,
+  };
 
   return (
     <TaskContext.Provider value={{ state, dispatch }}>

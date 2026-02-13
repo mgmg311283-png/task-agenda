@@ -19,9 +19,9 @@ export interface LogEntry {
   action: string;
   details: string;
   taskId?: number;
-  originalValues?: Partial<Task>;
-  newValues?: Partial<Task>;
-  source: 'UI' | 'Chat' | 'Audio' | 'Import';
+  originalValues?: string | null;
+  newValues?: string | null;
+  source: string;
 }
 
 export const COLUMNS = [
