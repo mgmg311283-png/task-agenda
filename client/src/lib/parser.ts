@@ -198,31 +198,34 @@ export function isTaskOverdue(dateStr: string): boolean {
 
 export function parseMultipleCommands(input: string, startId: number): CommandResult[] {
   // 1. Aggressive Normalization for Speech-to-Text Glitches
-  // Fix "puntonueva", "puntootra", "yademas", etc.
-  let normalized = input
-    .replace(/puntonueva/gi, '. nueva')
-    .replace(/puntootra/gi, '. otra')
-    .replace(/puntoproxima/gi, '. proxima')
-    .replace(/puntosiguiente/gi, '. siguiente')
+  let normalized = input.toLowerCase();
+
+  // FIX: Handle "punto" glued to words on either side
+  // "acciónpunto" -> "acción ."
+  // "puntonueva" -> ". nueva"
+  normalized = normalized.replace(/([a-z0-9áéíóúñ])punto/gi, '$1 .'); 
+  normalized = normalized.replace(/punto([a-z0-9áéíóúñ])/gi, '. $1');
+
+  // FIX: Handle specific glitches seen in screenshots
+  // "tareapoder" -> "tarea" (common misinterpretation or just glitch)
+  // Actually, let's just ensure "una tarea" or "nueva tarea" is separated
+  normalized = normalized.replace(/([a-z0-9áéíóúñ])(una|nueva|otra|proxima)tarea/gi, '$1 . $2 tarea');
+
+  // Fix "yademas" etc
+  normalized = normalized
     .replace(/yademas/gi, 'y ademas')
     .replace(/ytambien/gi, 'y tambien');
 
-  // 2. Normalize "punto" to "." generally if it looks like a separator
-  // "comprar pan punto llamar a Juan" -> "comprar pan . llamar a Juan"
+  // 2. Normalize "punto" to "." generally
   normalized = normalized.replace(/\s+punto\s+/gi, '. ');
-  
-  // 3. Handle case where "punto" might be stuck to the *previous* word too, though less common in this specific way
-  // But definitely handle "punto" at end of sentences if speech engine writes it as word
-  normalized = normalized.replace(/\s+punto$/gi, '.');
 
-  // 4. Split by explicit separators
+  // 3. Split by explicit separators
   // Separators: 
-  // - "nueva/otra/proxima/siguiente tarea"
   // - "." (dot)
+  // - "nueva/otra/proxima/siguiente/una tarea" (with optional words before)
   // - "y ademas", "y tambien"
-  // - Also just "nueva tarea" in the middle of text even without dot
   
-  const separatorRegex = /(?:[\s.]|^)(?:nueva|otra|proxima|siguiente)\s+tarea(?:[\s.]|$)|[.]\s+|(?:\s|^)y\s+(?:ademas|tambien)(?:\s|$)/i;
+  const separatorRegex = /[.]+|(?:\s|^)(?:nueva|otra|proxima|siguiente|una)\s+tarea(?:\s|$)|(?:\s|^)y\s+(?:ademas|tambien)(?:\s|$)/i;
   
   const parts = normalized.split(separatorRegex);
   
