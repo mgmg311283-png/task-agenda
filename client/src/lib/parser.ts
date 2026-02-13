@@ -195,3 +195,29 @@ export function isTaskOverdue(dateStr: string): boolean {
     return false;
   }
 }
+
+export function parseMultipleCommands(input: string, startId: number): CommandResult[] {
+  // Split by keywords "nueva tarea", "otra tarea", "punto nueva tarea", etc.
+  // We use a regex with capturing group to keep the delimiter if needed, but here we just want to split.
+  // We'll split by "nueva tarea" or "otra tarea" case insensitive.
+  
+  const parts = input.split(/\s+(?:nueva|otra)\s+tarea\s+/i);
+  
+  const results: CommandResult[] = [];
+  let currentId = startId;
+
+  parts.forEach(part => {
+      const trimmed = part.trim();
+      if (!trimmed) return;
+      
+      const result = parseCommand(trimmed, currentId);
+      results.push(result);
+      
+      // Only increment ID if we actually created a task
+      if (result.action === 'create') {
+          currentId++;
+      }
+  });
+
+  return results;
+}

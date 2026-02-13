@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Mic, Send, Terminal, Bot, User } from 'lucide-react';
-import { parseCommand, CommandResult } from '@/lib/parser';
+import { parseCommand, parseMultipleCommands, CommandResult } from '@/lib/parser';
 import { useTasks } from '@/lib/task-context';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
@@ -50,33 +50,64 @@ export function ChatInterface() {
       
       // Simulate "thinking" delay for AI feel
       setTimeout(() => {
-        const result = parseCommand(text, state.lastId + 1);
+        // Use the new multiple parser
+        const results = parseMultipleCommands(text, state.lastId + 1);
         
-        if (result.action === 'create') {
-            dispatch({ type: 'ADD_TASK', payload: result.payload, source: 'Chat' });
-            addMessage('system', `✅ Agregada: "${result.payload.text}" para el ${result.payload.date}.`, 'success');
-        } else if (result.action === 'delete') {
-            dispatch({ type: 'DELETE_TASK', payload: result.payload, source: 'Chat' });
-            addMessage('system', `🗑️ Tarea ${result.payload.id} eliminada.`, 'success');
-        } else if (result.action === 'complete') {
-            dispatch({ type: 'COMPLETE_TASK', payload: result.payload, source: 'Chat' });
-            addMessage('system', `🎉 Tarea ${result.payload.id} completada.`, 'success');
-        } else if (result.action === 'update') {
-            dispatch({ type: 'UPDATE_TASK', payload: { id: result.payload.id, updates: result.payload }, source: 'Chat' });
-            addMessage('system', `✏️ Tarea ${result.payload.id} actualizada.`, 'success');
-        } else if (result.action === 'move_expired') {
-            dispatch({ type: 'MOVE_EXPIRED', source: 'Chat' });
-            addMessage('system', `📅 Tareas vencidas movidas a hoy.`, 'success');
-        } else if (result.action === 'export') {
-            addMessage('system', `📂 Usa el botón de descarga arriba para exportar CSV.`, 'info');
-        } else if (result.action === 'unknown') {
-            addMessage('system', result.message || 'No entendí ese comando.', 'error');
-        } else if (result.action === 'help') {
-            addMessage('system', `💡 Comandos: \n- "Comprar leche mañana"\n- "Urgente llamar a Juan"\n- "Completar la 12"\n- "Borrar la 5"`, 'info');
+        if (results.length === 0) {
+            addMessage('system', 'No entendí el comando.', 'error');
+            setIsProcessing(false);
+            return;
+        }
+
+        // We need to dispatch sequentially or batch? 
+        // Dispatch is synchronous in React useReducer usually, but we are in a loop.
+        // We need to be careful about state.lastId.
+        // actually parseMultipleCommands handled the ID increment locally for the payloads.
+        // But the reducer "ADD_TASK" might rely on the payload ID.
+        // Our reducer: case 'ADD_TASK': ... lastId: Math.max(state.lastId, action.payload.id)
+        // So as long as payloads have distinct IDs, we are good.
+        
+        let successCount = 0;
+
+        results.forEach(result => {
+            if (result.action === 'create') {
+                dispatch({ type: 'ADD_TASK', payload: result.payload, source: 'Chat' });
+                // Only show individual success if it's a single command, otherwise summary?
+                // User wants to see items added.
+                if (results.length === 1) {
+                    addMessage('system', `✅ Agregada: "${result.payload.text}" para el ${result.payload.date}.`, 'success');
+                }
+                successCount++;
+            } else if (result.action === 'delete') {
+                dispatch({ type: 'DELETE_TASK', payload: result.payload, source: 'Chat' });
+                addMessage('system', `🗑️ Tarea ${result.payload.id} eliminada.`, 'success');
+            } else if (result.action === 'complete') {
+                dispatch({ type: 'COMPLETE_TASK', payload: result.payload, source: 'Chat' });
+                addMessage('system', `🎉 Tarea ${result.payload.id} completada.`, 'success');
+            } else if (result.action === 'update') {
+                dispatch({ type: 'UPDATE_TASK', payload: { id: result.payload.id, updates: result.payload }, source: 'Chat' });
+                addMessage('system', `✏️ Tarea ${result.payload.id} actualizada.`, 'success');
+            } else if (result.action === 'move_expired') {
+                dispatch({ type: 'MOVE_EXPIRED', source: 'Chat' });
+                addMessage('system', `📅 Tareas vencidas movidas a hoy.`, 'success');
+            } else if (result.action === 'export') {
+                addMessage('system', `📂 Usa el botón de descarga arriba para exportar CSV.`, 'info');
+            } else if (result.action === 'unknown') {
+                // If mixed with valid commands, maybe just warn?
+                if (results.length === 1) {
+                     addMessage('system', result.message || 'No entendí ese comando.', 'error');
+                }
+            } else if (result.action === 'help') {
+                addMessage('system', `💡 Comandos: \n- "Comprar leche mañana"\n- "Urgente llamar a Juan"\n- "Separador: 'nueva tarea'"`, 'info');
+            }
+        });
+
+        if (results.length > 1 && successCount > 0) {
+            addMessage('system', `✅ Se procesaron ${successCount} tareas nuevas.`, 'success');
         }
 
         setIsProcessing(false);
-      }, 600); // 600ms artificial delay
+      }, 600); 
   };
 
   const handleSubmit = (e?: React.FormEvent) => {
