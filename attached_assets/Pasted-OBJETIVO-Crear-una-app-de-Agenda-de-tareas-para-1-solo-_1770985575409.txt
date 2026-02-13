@@ -1,0 +1,179 @@
+OBJETIVO
+Crear una app de “Agenda de tareas” para 1 solo usuario (yo). Debe funcionar en celular y computadora. Debe mostrar lo mismo en todos lados. Debe ser rápida (carga y guardado sin demoras).
+
+USUARIO / ACCESO
+- Single-user: login simple por email.
+- No hace falta multiusuario.
+
+REGLA CLAVE DE VISUALIZACIÓN
+- En la pantalla principal SOLO se ven tareas pendientes (estado “activa”).
+- Tareas completadas y eliminadas NO se ven en el tablero. Solo aparecen en Historial/Log y en métricas.
+
+ENTIDADES (CONCEPTUALES)
+TAREA (campos mínimos)
+- NUMERO: entero correlativo incremental. Nunca se reutiliza, aunque se elimine.
+- FECHA: “dd/mm/yy” o “a definir”.
+- TAREA: texto breve.
+- PERSONA: default “a definir”.
+- TIPO: “accion” | “para pensar” | “a definir”.
+- URGENTE: si es urgente -> valor “urgente”; si no, vacío.
+- ESTADO: “activa” | “completada” | “eliminada”.
+- TIMESTAMPS: creación/última modificación (para historial).
+
+LOG / HISTORIAL (AUDITORÍA)
+Registrar TODO cambio con:
+- Fecha/hora, acción, antes/después, número de tarea, texto, fecha, tipo, urgente, y origen (UI / chat / audio / import).
+Acciones mínimas a loguear:
+- Crear tarea
+- Editar tarea (cualquier campo)
+- Completar tarea
+- Eliminar tarea
+- Eliminar seleccionadas (masivo)
+- Eliminar todas (masivo)
+- Mover vencidas a hoy (masivo)
+- Importar CSV
+- Exportar CSV
+
+MÉTRICAS (VISTA “REPORTES”)
+Mostrar conteos por semana y por mes (y rango custom si es fácil):
+- Tareas creadas
+- Tareas completadas
+- Tareas eliminadas
+- Tareas activas actuales
+- Tareas vencidas actuales
+
+INTERFAZ (TABLERO PRINCIPAL)
+Layout:
+- Arriba: tablero con 3 columnas:
+  1) URGENTE
+  2) ACCION
+  3) PENSAR
+- Abajo fijo: Chatbox (siempre visible).
+- Debe ser responsive (celular: columnas apilables o scrolleables sin romper uso).
+
+Tarjeta de tarea (card) debe permitir:
+- Ver: NUMERO, TAREA, FECHA, PERSONA, TIPO, URGENTE.
+- Editar inline: FECHA (dd/mm/yy o “a definir”), PERSONA, TAREA.
+- Botones rápidos:
+  - Completar (pasa a “completada” y desaparece del tablero)
+  - Eliminar (pasa a “eliminada” y desaparece del tablero)
+- Drag & drop entre columnas (o controles equivalentes si DnD no es estable en celular):
+  - Si se mueve a URGENTE: URGENTE=“urgente” (tipo se mantiene o queda editable)
+  - Si se mueve a ACCION: URGENTE vacío + TIPO=“accion”
+  - Si se mueve a PENSAR: URGENTE vacío + TIPO=“para pensar”
+
+Barra de acciones (botones globales) arriba:
+1) “Mover vencidas a hoy”
+   - Definición de vencida: FECHA != “a definir” y FECHA < hoy y ESTADO=activa
+   - Acción: setear FECHA = hoy (formato dd/mm/yy) a todas las vencidas activas
+2) “Exportar CSV”
+3) “Importar CSV”
+4) “Eliminar seleccionadas” (rápido)
+5) “Eliminar todas” (solo activas, confirmación fuerte)
+
+CSV (IMPORT/EXPORT)
+Formato obligatorio (columnas y orden):
+FECHA,NUMERO,TAREA,PERSONA,TIPO,URGENTE
+
+Reglas:
+- FECHA: dd/mm/yy o “a definir”
+- URGENTE: si es urgente, debe decir “urgente”; si no, vacío (coma y nada).
+- En IMPORT:
+  - Si viene NUMERO en el archivo: ignorarlo y asignar NUMERO nuevo correlativo (para evitar colisiones).
+  - Crear como ESTADO=activa.
+  - Normalizar TIPO a uno de: “accion” | “para pensar” | “a definir”.
+  - Normalizar PERSONA vacía a “a definir”.
+- En EXPORT:
+  - Exportar por defecto SOLO activas.
+  - (Opcional) permitir exportar también completadas/eliminadas desde Historial.
+
+REGLAS DE ORDEN (IMPORTANTE)
+Siempre mostrar tareas activas ordenadas en 3 bloques (columnas) y con este criterio:
+
+Concepto “a definir”:
+- En cualquier lista donde aplique FECHA: las FECHA = “a definir” deben ir primero (arriba de todo).
+- Luego fechas reales en orden ascendente.
+
+Bloque/Columna URGENTE (solo activas con URGENTE=“urgente”)
+Orden:
+1) PERSONA con prioridad: “a definir”, “Mariano”, “Aldana”, luego vendedores (cualquier otro nombre de vendedor), luego otros.
+2) FECHA: “a definir” primero, luego ascendente.
+3) NUMERO ascendente.
+
+Bloque/Columna ACCION (solo activas NO urgentes con TIPO = “accion” o “a definir”)
+Orden:
+1) FECHA: “a definir” primero, luego ascendente.
+2) Dentro de cada FECHA: PERSONA con el mismo orden.
+3) NUMERO ascendente.
+
+Bloque/Columna PENSAR (solo activas NO urgentes con TIPO = “para pensar”)
+Orden:
+1) FECHA ascendente, y al final las “a definir” (si esto complica, mantener “a definir” arriba como regla global).
+2) PERSONA con el mismo orden.
+3) NUMERO ascendente.
+
+FECHAS RELATIVAS Y “HOY”
+- Interpretar “hoy/mañana/pasado mañana/semana que viene” usando la fecha real del día, en zona horaria America/Argentina/Buenos_Aires.
+- Las tareas pueden caer en fines de semana (no restringir).
+
+CHATBOX (ABAJO, FIJO)
+Debe permitir:
+- Escribir instrucciones para crear/modificar/eliminar/completar.
+- Mostrar respuesta con:
+  - Qué cambió (resumen de acciones)
+  - Listado completo en formato:
+    URGENTE
+    FECHA,NUMERO,TAREA,PERSONA,TIPO,URGENTE
+    ...
+    ACCION
+    ...
+    PENSAR
+    ...
+    RESUMEN
+    Total tareas activas: X
+    Total tareas eliminadas: Y
+    Total tareas vencidas: Z
+
+COMANDOS QUE EL CHAT DEBE ENTENDER
+Altas:
+- “hay que …”
+- “tarea: …”
+- “agregar tarea: …”
+- Si no indica fecha: FECHA = “a definir”
+- Si no indica persona/tipo: default “a definir”
+
+Modificar (por NUMERO o por texto):
+- Cambiar FECHA (incluye dd/mm/yy y “a definir”, y relativos como “mañana”)
+- Cambiar PERSONA
+- Cambiar TIPO
+- Poner / sacar URGENTE
+- Cambiar descripción TAREA
+
+Eliminar:
+- SOLO si el texto dice explícitamente “eliminar” o “borrar” o “sacar” + número o + texto identificable.
+
+Completar:
+- “completar 12” o “marcar como hecha la 12” etc.
+
+Regla anti-errores:
+- Si hay ambigüedad (por ejemplo, 2 tareas matchean el texto), el chat debe listar las candidatas y pedir que se indique NUMERO.
+
+AUDIO (DICTADO)
+- Botón “Grabar” en el chatbox.
+- Grabar desde el navegador, transcribir y ejecutar igual que texto.
+- Mostrar la transcripción antes de ejecutar (para evitar acciones erróneas), con botón “Confirmar”.
+
+PANTALLAS MÍNIMAS
+1) Tablero (tareas activas) + chat fijo abajo
+2) Historial/Log (con filtros por fecha y tipo de acción)
+3) Reportes (métricas por semana/mes)
+
+CRITERIOS DE ACEPTACIÓN (PRUEBA MANUAL)
+- Creo tareas por UI y por chat y aparecen en el tablero.
+- Edito fecha/persona/tipo/urgente y se guarda y reordena correctamente.
+- Drag & drop (o control equivalente) mueve entre columnas y actualiza campos.
+- Completar y eliminar sacan la tarea del tablero y queda en Historial.
+- “Mover vencidas a hoy” actualiza todas las vencidas y registra en Historial.
+- Export CSV baja el archivo con el formato exacto.
+- Import CSV agrega tareas nuevas y asigna NUMERO correlativo sin colisiones.
+- En celular y PC: se ve igual y los cambios se reflejan inmediatamente.
