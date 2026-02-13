@@ -1,0 +1,31 @@
+export type TaskType = 'accion' | 'para_pensar' | 'a_definir';
+export type TaskStatus = 'activa' | 'completada' | 'eliminada';
+
+export interface Task {
+  id: number;
+  text: string;
+  date: string; // "dd/mm/yy" or "a definir"
+  person: string;
+  type: TaskType;
+  urgent: boolean;
+  status: TaskStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LogEntry {
+  id: string;
+  timestamp: string;
+  action: string;
+  details: string;
+  taskId?: number;
+  originalValues?: Partial<Task>;
+  newValues?: Partial<Task>;
+  source: 'UI' | 'Chat' | 'Audio' | 'Import';
+}
+
+export const COLUMNS = [
+  { id: 'urgent', title: 'URGENTE', color: 'urgent' },
+  { id: 'action', title: 'ACCION', color: 'action' },
+  { id: 'think', title: 'PENSAR', color: 'think' },
+] as const;
