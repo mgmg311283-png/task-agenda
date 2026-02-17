@@ -1,11 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Mic, Send, Terminal, Bot, User } from 'lucide-react';
-import { parseCommand, parseMultipleCommands, CommandResult } from '@/lib/parser';
+import { Mic, Send, Terminal, Bot, User, Loader2 } from 'lucide-react';
 import { useTasks } from '@/lib/task-context';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
-import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface ChatMessage {
     id: string;
@@ -19,7 +17,7 @@ export function ChatInterface() {
   const [input, setInput] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
-      { id: '1', role: 'system', text: 'Hola. ¿Qué tareas gestionamos hoy?', timestamp: new Date(), type: 'info' }
+      { id: '1', role: 'system', text: 'Hola. Dicta o escribi lo que necesites, la IA interpreta todo.', timestamp: new Date(), type: 'info' }
   ]);
   const [isProcessing, setIsProcessing] = useState(false);
   
@@ -45,76 +43,92 @@ export function ChatInterface() {
       }]);
   };
 
-  const processCommand = (text: string) => {
+  const processCommand = async (text: string) => {
       setIsProcessing(true);
       
-      // Simulate "thinking" delay for AI feel
-      setTimeout(() => {
-        // Use the new multiple parser
-        const results = parseMultipleCommands(text, state.lastId + 1);
+      try {
+        const existingTaskIds = state.tasks.map(t => t.id);
         
-        if (results.length === 0) {
-            addMessage('system', 'No entendí el comando.', 'error');
-            setIsProcessing(false);
-            return;
+        const response = await fetch('/api/parse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text, existingTaskIds }),
+        });
+        
+        if (!response.ok) {
+          const err = await response.json();
+          addMessage('system', err.message || 'Error al procesar con IA.', 'error');
+          setIsProcessing(false);
+          return;
+        }
+        
+        const parsed = await response.json();
+        const actions = parsed.actions || [];
+        
+        if (actions.length === 0) {
+          addMessage('system', parsed.summary || 'No entendi el comando.', 'error');
+          setIsProcessing(false);
+          return;
         }
 
-        // We need to dispatch sequentially or batch? 
-        // Dispatch is synchronous in React useReducer usually, but we are in a loop.
-        // We need to be careful about state.lastId.
-        // actually parseMultipleCommands handled the ID increment locally for the payloads.
-        // But the reducer "ADD_TASK" might rely on the payload ID.
-        // Our reducer: case 'ADD_TASK': ... lastId: Math.max(state.lastId, action.payload.id)
-        // So as long as payloads have distinct IDs, we are good.
-        
         let successCount = 0;
 
-        results.forEach(result => {
-            if (result.action === 'create') {
-                dispatch({ type: 'ADD_TASK', payload: result.payload, source: 'Chat' });
-                // Only show individual success if it's a single command, otherwise summary?
-                // User wants to see items added.
-                if (results.length === 1) {
-                    addMessage('system', `✅ Agregada: "${result.payload.text}" para el ${result.payload.date}.`, 'success');
-                }
-                successCount++;
-            } else if (result.action === 'delete') {
-                dispatch({ type: 'DELETE_TASK', payload: result.payload, source: 'Chat' });
-                addMessage('system', `🗑️ Tarea ${result.payload.id} eliminada.`, 'success');
-            } else if (result.action === 'complete') {
-                dispatch({ type: 'COMPLETE_TASK', payload: result.payload, source: 'Chat' });
-                addMessage('system', `🎉 Tarea ${result.payload.id} completada.`, 'success');
-            } else if (result.action === 'update') {
-                dispatch({ type: 'UPDATE_TASK', payload: { id: result.payload.id, updates: result.payload }, source: 'Chat' });
-                addMessage('system', `✏️ Tarea ${result.payload.id} actualizada.`, 'success');
-            } else if (result.action === 'move_expired') {
-                dispatch({ type: 'MOVE_EXPIRED', source: 'Chat' });
-                addMessage('system', `📅 Tareas vencidas movidas a hoy.`, 'success');
-            } else if (result.action === 'export') {
-                addMessage('system', `📂 Usa el botón de descarga arriba para exportar CSV.`, 'info');
-            } else if (result.action === 'unknown') {
-                // If mixed with valid commands, maybe just warn?
-                if (results.length === 1) {
-                     addMessage('system', result.message || 'No entendí ese comando.', 'error');
-                }
-            } else if (result.action === 'help') {
-                addMessage('system', `💡 Puedes separar tareas diciendo:\n- "punto"\n- "nueva tarea"\n- "y también"\nEj: "Comprar pan punto llamar a Juan"`, 'info');
+        for (const action of actions) {
+          if (action.action === 'create') {
+            const payload = {
+              text: action.text || 'Nueva tarea',
+              date: action.date || 'a definir',
+              person: action.person || 'a definir',
+              type: action.type || 'a_definir',
+              urgent: action.urgent || false,
+              status: 'activa' as const,
+            };
+            dispatch({ type: 'ADD_TASK', payload, source: 'Chat' });
+            if (actions.length === 1) {
+              addMessage('system', `Agregada: "${payload.text}" para el ${payload.date}.`, 'success');
             }
-        });
-
-        if (results.length > 1 && successCount > 0) {
-            addMessage('system', `✅ Se procesaron ${successCount} tareas nuevas.`, 'success');
+            successCount++;
+          } else if (action.action === 'delete' && action.id) {
+            dispatch({ type: 'DELETE_TASK', payload: { id: action.id }, source: 'Chat' });
+            addMessage('system', `Tarea ${action.id} eliminada.`, 'success');
+          } else if (action.action === 'complete' && action.id) {
+            dispatch({ type: 'COMPLETE_TASK', payload: { id: action.id }, source: 'Chat' });
+            addMessage('system', `Tarea ${action.id} completada.`, 'success');
+          } else if (action.action === 'update' && action.id) {
+            const updates: any = {};
+            if (action.text) updates.text = action.text;
+            if (action.date) updates.date = action.date;
+            if (action.person) updates.person = action.person;
+            if (action.type) updates.type = action.type;
+            if (action.urgent !== undefined) updates.urgent = action.urgent;
+            dispatch({ type: 'UPDATE_TASK', payload: { id: action.id, updates }, source: 'Chat' });
+            addMessage('system', `Tarea ${action.id} actualizada.`, 'success');
+          } else if (action.action === 'move_expired') {
+            dispatch({ type: 'MOVE_EXPIRED', source: 'Chat' });
+            addMessage('system', `Tareas vencidas movidas a hoy.`, 'success');
+          } else if (action.action === 'export') {
+            addMessage('system', `Usa el boton de descarga arriba para exportar CSV.`, 'info');
+          }
         }
 
-        setIsProcessing(false);
-      }, 600); 
+        if (actions.length > 1 && successCount > 0) {
+          addMessage('system', `Se procesaron ${successCount} tareas nuevas.`, 'success');
+        }
+        
+        if (parsed.summary && actions.length > 1) {
+          addMessage('system', parsed.summary, 'info');
+        }
+      } catch (e: any) {
+        addMessage('system', 'Error de conexion con el servidor.', 'error');
+      }
+
+      setIsProcessing(false);
   };
 
-  const handleSubmit = (e?: React.FormEvent) => {
+  const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!input.trim()) return;
+    if (!input.trim() || isProcessing) return;
 
-    // Stop listening if we submit while listening
     if (isListening && recognitionRef.current) {
         recognitionRef.current.stop();
         setIsListening(false);
@@ -123,7 +137,7 @@ export function ChatInterface() {
     const userText = input;
     setInput('');
     addMessage('user', userText);
-    processCommand(userText);
+    await processCommand(userText);
   };
 
   const toggleMic = () => {
@@ -241,8 +255,9 @@ export function ChatInterface() {
                 <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center shrink-0 mt-1">
                     <Bot className="w-3 h-3" />
                 </div>
-                <div className="p-2.5 rounded-lg text-sm bg-gray-200 text-gray-500 font-mono animate-pulse">
-                    Procesando...
+                <div className="p-2.5 rounded-lg text-sm bg-gray-200 text-gray-500 font-mono flex items-center gap-2">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    Interpretando con IA...
                 </div>
             </div>
         )}
@@ -257,7 +272,7 @@ export function ChatInterface() {
                 ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Escribe 'reunion el viernes' o 'completar 12'..."
+                placeholder="Dicta o pega tareas... Ej: 'reunion con Juan el viernes y preparar informe'"
                 className="w-full bg-gray-50 border-2 border-transparent focus:border-black pl-10 pr-4 py-3 text-sm font-mono focus:outline-none transition-all placeholder:text-gray-400 rounded-md"
                 autoFocus
                 />
@@ -279,7 +294,7 @@ export function ChatInterface() {
             <Button 
                 type="submit" 
                 className="h-11 w-11 shrink-0 rounded-md bg-black text-white hover:bg-gray-800 shadow-none border-2 border-black"
-                disabled={!input.trim()}
+                disabled={!input.trim() || isProcessing}
             >
             <Send className="h-4 w-4" />
             </Button>

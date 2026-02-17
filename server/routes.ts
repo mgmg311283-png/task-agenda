@@ -3,6 +3,12 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertTaskSchema, updateTaskSchema } from "@shared/schema";
 import { parse, isValid, isBefore, startOfDay, format } from "date-fns";
+import OpenAI from "openai";
+
+const openai = new OpenAI({
+  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+});
 
 export async function registerRoutes(
   httpServer: Server,
@@ -195,6 +201,113 @@ export async function registerRoutes(
     const limit = parseInt(req.query.limit as string) || 200;
     const logEntries = await storage.getLogs(limit);
     res.json(logEntries);
+  });
+
+  // ---- AI PARSE ----
+
+  app.post("/api/parse", async (req, res) => {
+    try {
+      const { text, existingTaskIds } = req.body;
+      if (!text || typeof text !== "string") {
+        return res.status(400).json({ message: "Text is required" });
+      }
+
+      const today = format(new Date(), "dd/MM/yy");
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-5-mini",
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content: `Sos un asistente de gestión de tareas para una app de productividad en español argentino.
+
+Tu trabajo es interpretar texto dictado por voz o pegado y convertirlo en acciones estructuradas.
+
+HOY es: ${today}
+
+ACCIONES posibles:
+- "create": crear una nueva tarea
+- "complete": completar una tarea existente (necesita id)
+- "delete": eliminar una tarea existente (necesita id)
+- "update": modificar una tarea existente (necesita id)
+- "move_expired": mover tareas vencidas a hoy
+- "export": exportar tareas
+
+TIPOS de tarea:
+- "accion": tarea con acción concreta (si tiene fecha, es acción)
+- "para_pensar": idea o cosa para pensar/evaluar
+- "a_definir": no queda claro
+
+FORMATO de fecha: dd/mm/yy (ej: 15/03/26)
+
+PERSONAS conocidas: Mariano, Aldana (si no se menciona persona, usar "a definir")
+
+REGLAS IMPORTANTES:
+1. Si el usuario dice algo con "y" como conector dentro de UNA misma tarea, NO lo separes en dos. Ejemplo: "comprar pan y leche" es UNA sola tarea.
+2. Solo separá en múltiples tareas si claramente son cosas distintas e independientes. Ejemplo: "comprar pan. llamar al doctor" son DOS tareas.
+3. Si dice "punto" o hay una pausa clara entre ideas distintas, ahí sí separá.
+4. El texto puede tener errores de dictado por voz, interpretá la intención.
+5. Si menciona "urgente", "ya", "ahora", "prioridad", "asap" → marcar urgent: true
+6. Limpiar el texto de la tarea: no incluir palabras como "agregar tarea", "anotar", etc. Solo la descripción de lo que hay que hacer.
+7. Las fechas relativas como "mañana", "el lunes", "la semana que viene" deben convertirse al formato dd/mm/yy.
+
+IDs de tareas existentes: ${JSON.stringify(existingTaskIds || [])}
+
+Responde SIEMPRE con un JSON con esta estructura:
+{
+  "actions": [
+    {
+      "action": "create",
+      "text": "descripción limpia de la tarea",
+      "date": "dd/mm/yy" o "a definir",
+      "person": "nombre" o "a definir",
+      "type": "accion" | "para_pensar" | "a_definir",
+      "urgent": false
+    }
+  ],
+  "summary": "breve resumen en español de lo que se hizo"
+}`
+          },
+          {
+            role: "user",
+            content: text,
+          },
+        ],
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        return res.status(500).json({ message: "No response from AI" });
+      }
+
+      let parsed: any;
+      try {
+        parsed = JSON.parse(content);
+      } catch {
+        return res.status(500).json({ message: "AI returned invalid response" });
+      }
+
+      const validActions = ['create', 'complete', 'delete', 'update', 'move_expired', 'export'];
+      const validTypes = ['accion', 'para_pensar', 'a_definir'];
+      
+      const actions = (parsed.actions || [])
+        .filter((a: any) => validActions.includes(a.action))
+        .map((a: any) => ({
+          action: a.action,
+          ...(a.id ? { id: Number(a.id) } : {}),
+          ...(a.text ? { text: String(a.text).trim() } : {}),
+          date: a.date || 'a definir',
+          person: a.person || 'a definir',
+          type: validTypes.includes(a.type) ? a.type : 'a_definir',
+          urgent: Boolean(a.urgent),
+        }));
+
+      res.json({ actions, summary: parsed.summary || '' });
+    } catch (e: any) {
+      console.error("AI parse error:", e);
+      res.status(500).json({ message: "Error processing with AI: " + e.message });
+    }
   });
 
   return httpServer;

@@ -18,7 +18,7 @@ Preferred communication style: Simple, everyday language.
 - **State Management**: React Context (`TaskProvider`) wrapping TanStack React Query for server state. The context provides a `dispatch` function that translates actions into API calls via mutations, then invalidates query caches.
 - **UI Components**: shadcn/ui component library (new-york style) built on Radix UI primitives, styled with Tailwind CSS v4
 - **Drag & Drop**: @dnd-kit for Kanban board column reordering
-- **Natural Language Parsing**: Custom parser (`client/src/lib/parser.ts`) using chrono-node for date extraction. Supports Spanish-language commands for task CRUD operations.
+- **Natural Language Parsing**: AI-powered parser using OpenAI (gpt-5-mini via Replit AI Integrations) for intelligent task interpretation. Server endpoint `/api/parse` receives raw Spanish text (voice-dictated or typed) and returns structured task actions. Handles connectors like "y" intelligently (keeps "pan y leche" as one task, separates distinct tasks). Legacy regex parser in `client/src/lib/parser.ts` still available as fallback reference.
 - **CSV Handling**: PapaParse for import/export of task data
 - **Design**: Brutalist aesthetic — `--radius: 0rem` for sharp corners, JetBrains Mono for monospace elements, Inter for body text. Custom CSS variables for column colors (urgent/action/think).
 
@@ -69,6 +69,10 @@ Preferred communication style: Simple, everyday language.
 - **zod** + **drizzle-zod**: Schema validation
 - **recharts**: Charting library (available for metrics views)
 
+- **openai**: OpenAI SDK for AI-powered task parsing (via Replit AI Integrations)
+
 ### Environment Variables
 - `DATABASE_URL` — PostgreSQL connection string (required)
 - `NODE_ENV` — Controls dev/production mode behavior
+- `AI_INTEGRATIONS_OPENAI_API_KEY` — OpenAI API key (managed by Replit AI Integrations)
+- `AI_INTEGRATIONS_OPENAI_BASE_URL` — OpenAI base URL (managed by Replit AI Integrations)
