@@ -39,19 +39,11 @@ function getSortedTasks(tasks: Task[], columnId: string): Task[] {
             return 2;
         };
 
-        if (columnId === 'urgent') {
-            const pA = getPersonWeight(a.person);
-            const pB = getPersonWeight(b.person);
-            if (pA !== pB) return pA - pB;
-            if (dateA !== dateB) return dateA - dateB;
-            return a.id - b.id;
-        } else {
-            if (dateA !== dateB) return dateA - dateB;
-            const pA = getPersonWeight(a.person);
-            const pB = getPersonWeight(b.person);
-            if (pA !== pB) return pA - pB;
-            return a.id - b.id;
-        }
+        if (dateA !== dateB) return dateA - dateB;
+        const pA = getPersonWeight(a.person);
+        const pB = getPersonWeight(b.person);
+        if (pA !== pB) return pA - pB;
+        return a.id - b.id;
     });
 }
 
