@@ -10,6 +10,17 @@ const openai = new OpenAI({
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
 });
 
+function parseTaskDate(dateStr: string): Date | null {
+  const formats = ["dd/MM/yy", "dd/MM/yyyy"];
+  for (const fmt of formats) {
+    try {
+      const d = parse(dateStr, fmt, new Date());
+      if (isValid(d)) return d;
+    } catch {}
+  }
+  return null;
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -121,24 +132,23 @@ export async function registerRoutes(
   // Move expired tasks to today
   app.post("/api/tasks/move-expired", async (req, res) => {
     const today = startOfDay(new Date());
-    const todayStr = format(today, "dd/MM/yy");
 
-    // Get all active tasks with real dates
     const activeTasks = await storage.getActiveTasks();
     let count = 0;
 
     for (const task of activeTasks) {
       if (task.date === "a definir") continue;
-      try {
-        const taskDate = parse(task.date, "dd/MM/yy", new Date());
-        if (isValid(taskDate) && isBefore(taskDate, today)) {
-          await storage.updateTask(task.id, { date: todayStr });
-          count++;
-        }
-      } catch {
-        // Skip invalid dates
+      const taskDate = parseTaskDate(task.date);
+      if (taskDate && isBefore(taskDate, today)) {
+        const todayFmt = task.date.length > 8
+          ? format(today, "dd/MM/yyyy")
+          : format(today, "dd/MM/yy");
+        await storage.updateTask(task.id, { date: todayFmt });
+        count++;
       }
     }
+
+    const todayStr = format(today, "dd/MM/yy");
 
     if (count > 0) {
       await storage.createLog({
