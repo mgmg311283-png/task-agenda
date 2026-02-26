@@ -7,6 +7,17 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 
+function parseDateToSortKey(dateStr: string): number {
+    if (dateStr === 'a definir') return -1;
+    const parts = dateStr.split('/');
+    if (parts.length !== 3) return Infinity;
+    const day = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10);
+    let year = parseInt(parts[2], 10);
+    if (year < 100) year += 2000;
+    return year * 10000 + month * 100 + day;
+}
+
 function getSortedTasks(tasks: Task[], columnId: string): Task[] {
     const colTasks = tasks.filter(t => {
         if (t.status !== 'activa') return false;
@@ -17,8 +28,8 @@ function getSortedTasks(tasks: Task[], columnId: string): Task[] {
     });
 
     return colTasks.sort((a, b) => {
-        const dateA = a.date === 'a definir' ? '0000-00-00' : a.date.split('/').reverse().join('-');
-        const dateB = b.date === 'a definir' ? '0000-00-00' : b.date.split('/').reverse().join('-');
+        const dateA = parseDateToSortKey(a.date);
+        const dateB = parseDateToSortKey(b.date);
 
         const priorityPersons = ['mariano', 'aldana'];
         const getPersonWeight = (p: string) => {
@@ -32,10 +43,10 @@ function getSortedTasks(tasks: Task[], columnId: string): Task[] {
             const pA = getPersonWeight(a.person);
             const pB = getPersonWeight(b.person);
             if (pA !== pB) return pA - pB;
-            if (dateA !== dateB) return dateA.localeCompare(dateB);
+            if (dateA !== dateB) return dateA - dateB;
             return a.id - b.id;
         } else {
-            if (dateA !== dateB) return dateA.localeCompare(dateB);
+            if (dateA !== dateB) return dateA - dateB;
             const pA = getPersonWeight(a.person);
             const pB = getPersonWeight(b.person);
             if (pA !== pB) return pA - pB;
