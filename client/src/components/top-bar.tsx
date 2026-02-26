@@ -19,7 +19,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useState } from "react";
 
 export function TopBar() {
-  const { state, dispatch } = useTasks();
+  const { state, dispatch, moveExpiredAsync } = useTasks();
   const [csvContent, setCsvContent] = useState("");
   const [isImportOpen, setIsImportOpen] = useState(false);
 
@@ -116,9 +116,17 @@ export function TopBar() {
                 variant="outline" 
                 size="sm" 
                 className="h-8 text-xs hidden sm:flex gap-1 border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 hover:text-orange-800" 
-                onClick={() => {
-                    dispatch({ type: 'MOVE_EXPIRED', source: 'UI' });
-                    toast({ title: "Vencidas Actualizadas", description: "Se han movido las tareas vencidas a hoy." });
+                onClick={async () => {
+                    try {
+                        const result = await moveExpiredAsync('UI');
+                        if (result.moved > 0) {
+                            toast({ title: "Vencidas Actualizadas", description: `Se movieron ${result.moved} tarea(s) a hoy (${result.date}).` });
+                        } else {
+                            toast({ title: "Sin cambios", description: "No hay tareas vencidas para mover." });
+                        }
+                    } catch {
+                        toast({ variant: "destructive", title: "Error", description: "No se pudieron mover las tareas vencidas." });
+                    }
                 }}
             >
                 <CalendarClock className="w-3 h-3" /> Vencidas a Hoy

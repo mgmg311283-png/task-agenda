@@ -12,6 +12,7 @@ interface TaskContextValue {
     isLoading: boolean;
   };
   dispatch: (action: Action) => void;
+  moveExpiredAsync: (source: string) => Promise<{ moved: number; date: string }>;
 }
 
 type Action =
@@ -86,12 +87,16 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   });
 
   const moveExpiredMutation = useMutation({
-    mutationFn: async (data: { source: string }) => {
+    mutationFn: async (data: { source: string }): Promise<{ moved: number; date: string }> => {
       const res = await apiRequest('POST', '/api/tasks/move-expired', { source: data.source });
       return res.json();
     },
     onSuccess: invalidate,
   });
+
+  const moveExpiredAsync = useCallback(async (source: string) => {
+    return moveExpiredMutation.mutateAsync({ source });
+  }, [moveExpiredMutation]);
 
   const deleteAllMutation = useMutation({
     mutationFn: async (data: { source: string }) => {
@@ -146,7 +151,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <TaskContext.Provider value={{ state, dispatch }}>
+    <TaskContext.Provider value={{ state, dispatch, moveExpiredAsync }}>
       {children}
     </TaskContext.Provider>
   );

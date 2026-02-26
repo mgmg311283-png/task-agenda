@@ -1,4 +1,4 @@
-import { eq, and, lt, ne, desc, sql } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { tasks, logs, type Task, type InsertTask, type UpdateTask, type LogEntry, type InsertLog } from "@shared/schema";
@@ -18,7 +18,6 @@ export interface IStorage {
   updateTask(id: number, updates: UpdateTask): Promise<Task | undefined>;
   deleteTask(id: number): Promise<Task | undefined>;
   completeTask(id: number): Promise<Task | undefined>;
-  moveExpiredToToday(todayStr: string): Promise<number>;
   deleteAllActive(): Promise<number>;
   importTasks(tasksData: InsertTask[]): Promise<Task[]>;
   getNextId(): Promise<number>;
@@ -61,21 +60,6 @@ export class DatabaseStorage implements IStorage {
 
   async completeTask(id: number): Promise<Task | undefined> {
     return this.updateTask(id, { status: "completada" });
-  }
-
-  async moveExpiredToToday(todayStr: string): Promise<number> {
-    const result = await db.update(tasks)
-      .set({ date: todayStr, updatedAt: new Date() })
-      .where(
-        and(
-          eq(tasks.status, "activa"),
-          ne(tasks.date, "a definir"),
-          // We can't do date comparison directly since dates are stored as dd/MM/yy strings
-          // We'll handle this in the route by fetching active tasks and filtering
-        )
-      )
-      .returning();
-    return result.length;
   }
 
   async deleteAllActive(): Promise<number> {
