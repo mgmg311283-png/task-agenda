@@ -136,8 +136,14 @@ export async function registerRoutes(
     const activeTasks = await storage.getActiveTasks();
     let count = 0;
 
+    const todayStr = format(today, "dd/MM/yy");
+
     for (const task of activeTasks) {
-      if (task.date === "a definir") continue;
+      if (task.date === "a definir") {
+        await storage.updateTask(task.id, { date: todayStr });
+        count++;
+        continue;
+      }
       const taskDate = parseTaskDate(task.date);
       if (taskDate && isBefore(taskDate, today)) {
         const todayFmt = task.date.length > 8
@@ -147,8 +153,6 @@ export async function registerRoutes(
         count++;
       }
     }
-
-    const todayStr = format(today, "dd/MM/yy");
 
     if (count > 0) {
       await storage.createLog({
