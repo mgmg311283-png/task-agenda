@@ -6,8 +6,7 @@ import { parse, isValid, isBefore, startOfDay, format } from "date-fns";
 import OpenAI from "openai";
 
 const openai = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
 function parseTaskDate(dateStr: string): Date | null {
@@ -229,7 +228,7 @@ export async function registerRoutes(
       const today = format(new Date(), "dd/MM/yy");
 
       const response = await openai.chat.completions.create({
-        model: "gpt-5-mini",
+        model: "gpt-4o-mini",
         response_format: { type: "json_object" },
         messages: [
           {

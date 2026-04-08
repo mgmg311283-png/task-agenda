@@ -74,5 +74,4 @@ Preferred communication style: Simple, everyday language.
 ### Environment Variables
 - `DATABASE_URL` — PostgreSQL connection string (required)
 - `NODE_ENV` — Controls dev/production mode behavior
-- `AI_INTEGRATIONS_OPENAI_API_KEY` — OpenAI API key (managed by Replit AI Integrations)
-- `AI_INTEGRATIONS_OPENAI_BASE_URL` — OpenAI base URL (managed by Replit AI Integrations)
+- `OPENAI_API_KEY` — OpenAI API key (user-provided secret, used for gpt-4o-mini)
