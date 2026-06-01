@@ -56,6 +56,8 @@ const MOVE_OPTIONS = [
   { id: 'think', label: 'PENSAR', icon: '🟡', updates: { urgent: false, type: 'para_pensar' as const } },
 ];
 
+const PERSONAS = ['mariano', 'aldana', 'Alejandro', 'Enzo', 'penso', 'Daniel', 'Carla', 'Cebrero', 'Marcos', 'Gonzalo'];
+
 export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps) {
   const {
     attributes,
@@ -80,6 +82,7 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps
     <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="touch-manipulation mb-3">
       <Card className="rounded-none border-t-0 border-x-0 border-b-1 shadow-none hover:bg-muted/30 transition-colors group" data-testid={`card-task-${task.id}`}>
         <CardContent className="p-3">
+
           {/* Header Line */}
           <div className="flex items-center justify-between text-xs font-mono text-muted-foreground mb-2">
             <span className="flex items-center gap-2">
@@ -91,6 +94,7 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps
               )}
             </span>
             <div className="flex gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+              {/* Move column dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -121,6 +125,8 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
+
+              {/* Complete button */}
               <Button
                 variant="ghost"
                 size="icon"
@@ -131,6 +137,8 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps
               >
                 <Check className="h-3 w-3" />
               </Button>
+
+              {/* Delete button */}
               <Button
                 variant="ghost"
                 size="icon"
@@ -146,83 +154,125 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps
 
           {/* Body - Editable text */}
           <div className="mb-2">
-             {isEditingText ? (
-                 <input
-                    className="w-full bg-transparent border-b border-dashed border-gray-400 font-sans font-medium text-sm focus:outline-none"
-                    defaultValue={task.text}
-                    autoFocus
-                    data-testid={`input-text-${task.id}`}
-                    onClick={(e) => e.stopPropagation()}
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onBlur={(e) => {
-                        setIsEditingText(false);
-                        if (e.target.value.trim() && e.target.value !== task.text) {
-                            onUpdate(task.id, { text: e.target.value.trim() });
-                        }
-                    }}
-                    onKeyDown={(e) => {
-                        e.stopPropagation();
-                        if (e.key === 'Enter') e.currentTarget.blur();
-                        if (e.key === 'Escape') { setIsEditingText(false); }
-                    }}
-                 />
-             ) : (
-                <p
-                    className="font-sans font-medium text-sm leading-snug cursor-text group/text"
-                    onClick={(e) => { e.stopPropagation(); setIsEditingText(true); }}
-                    onPointerDown={(e) => e.stopPropagation()}
-                    data-testid={`text-task-${task.id}`}
-                >
-                    {task.text}
-                    <Pencil className="inline-block w-3 h-3 ml-1.5 text-gray-300 md:opacity-0 md:group-hover/text:opacity-100 transition-opacity align-text-bottom" />
-                </p>
-             )}
+            {isEditingText ? (
+              <input
+                className="w-full bg-transparent border-b border-dashed border-gray-400 font-sans font-medium text-sm focus:outline-none"
+                defaultValue={task.text}
+                autoFocus
+                data-testid={`input-text-${task.id}`}
+                onClick={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
+                onBlur={(e) => {
+                  setIsEditingText(false);
+                  if (e.target.value.trim() && e.target.value !== task.text) {
+                    onUpdate(task.id, { text: e.target.value.trim() });
+                  }
+                }}
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  if (e.key === 'Enter') e.currentTarget.blur();
+                  if (e.key === 'Escape') setIsEditingText(false);
+                }}
+              />
+            ) : (
+              <p
+                className="font-sans font-medium text-sm leading-snug cursor-text group/text"
+                onClick={(e) => { e.stopPropagation(); setIsEditingText(true); }}
+                onPointerDown={(e) => e.stopPropagation()}
+                data-testid={`text-task-${task.id}`}
+              >
+                {task.text}
+                <Pencil className="inline-block w-3 h-3 ml-1.5 text-gray-300 md:opacity-0 md:group-hover/text:opacity-100 transition-opacity align-text-bottom" />
+              </p>
+            )}
           </div>
 
-          {/* Footer Metadata */}
-          <div className="flex items-center justify-between mt-3 text-xs">
-             <div className="flex items-center gap-2">
-                <Badge variant="outline" className="rounded-none border-gray-200 text-gray-500 font-normal px-1.5 h-5">
-                    {task.person}
-                </Badge>
-             </div>
-             <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-                <PopoverTrigger asChild>
-                  <button
-                    className={cn(
-                        "font-mono tracking-tight text-xs flex items-center gap-1 cursor-pointer hover:text-foreground transition-colors group/date",
-                        task.date === 'a definir' ? "text-gray-400 italic" : "text-gray-600"
-                    )}
-                    onClick={(e) => e.stopPropagation()}
-                    onPointerDown={(e) => e.stopPropagation()}
-                    data-testid={`text-date-${task.id}`}
-                  >
-                    {task.date}
-                    <CalendarIcon className="w-3 h-3 text-gray-300 md:opacity-0 md:group-hover/date:opacity-100 transition-opacity" />
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent
-                  className="w-auto p-0"
-                  align="end"
-                  onPointerDown={(e) => e.stopPropagation()}
+          {/* Footer Metadata: person + date */}
+          <div className="flex items-center gap-2 mt-3 text-xs">
+
+            {/* Person dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Badge
+                  variant="outline"
+                  className="rounded-none border-gray-200 text-gray-500 font-normal px-1.5 h-5 cursor-pointer hover:border-gray-400 hover:text-gray-700 transition-colors"
                   onClick={(e) => e.stopPropagation()}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  data-testid={`badge-person-${task.id}`}
                 >
-                  <Calendar
-                    mode="single"
-                    locale={es}
-                    selected={parseDateStr(task.date)}
-                    defaultMonth={parseDateStr(task.date) || new Date()}
-                    onSelect={(date) => {
-                      if (date) {
-                        onUpdate(task.id, { date: formatDate(date) });
-                      }
-                      setCalendarOpen(false);
-                    }}
-                    data-testid={`calendar-${task.id}`}
-                  />
-                </PopoverContent>
-              </Popover>
+                  {task.person || 'sin asignar'}
+                </Badge>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="start"
+                className="min-w-[140px]"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <DropdownMenuItem
+                  key="none"
+                  onClick={() => onUpdate(task.id, { person: '' })}
+                  className="font-mono text-xs cursor-pointer text-gray-400 italic"
+                  data-testid={`person-none-${task.id}`}
+                >
+                  sin asignar
+                </DropdownMenuItem>
+                {PERSONAS.map((persona) => (
+                  <DropdownMenuItem
+                    key={persona}
+                    onClick={() => onUpdate(task.id, { person: persona })}
+                    className={cn(
+                      "font-mono text-xs cursor-pointer",
+                      task.person === persona && "font-bold"
+                    )}
+                    data-testid={`person-${persona}-${task.id}`}
+                  >
+                    {persona}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Date picker */}
+            <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  className={cn(
+                    "font-mono tracking-tight text-xs flex items-center gap-1 cursor-pointer hover:text-foreground transition-colors group/date",
+                    task.date === 'a definir' ? "text-gray-400 italic" : "text-gray-600"
+                  )}
+                  onClick={(e) => e.stopPropagation()}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  data-testid={`text-date-${task.id}`}
+                >
+                  {task.date}
+                  <CalendarIcon className="w-3 h-3 text-gray-300 md:opacity-0 md:group-hover/date:opacity-100 transition-opacity" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="w-auto p-0"
+                align="end"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Calendar
+                  mode="single"
+                  locale={es}
+                  selected={parseDateStr(task.date)}
+                  defaultMonth={parseDateStr(task.date) || new Date()}
+                  onSelect={(date) => {
+                    if (date) {
+                      onUpdate(task.id, { date: formatDate(date) });
+                    }
+                    setCalendarOpen(false);
+                  }}
+                  data-testid={`calendar-${task.id}`}
+                />
+              </PopoverContent>
+            </Popover>
+
           </div>
+
         </CardContent>
       </Card>
     </div>
