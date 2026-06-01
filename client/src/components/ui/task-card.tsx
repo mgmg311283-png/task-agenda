@@ -209,14 +209,6 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => e.stopPropagation()}
               >
-                <DropdownMenuItem
-                  key="none"
-                  onClick={() => onUpdate(task.id, { person: '' })}
-                  className="font-mono text-xs cursor-pointer text-gray-400 italic"
-                  data-testid={`person-none-${task.id}`}
-                >
-                  sin asignar
-                </DropdownMenuItem>
                 {PERSONAS.map((persona) => (
                   <DropdownMenuItem
                     key={persona}
