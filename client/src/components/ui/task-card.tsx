@@ -257,7 +257,17 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps
                   <CalendarIcon className="w-3 h-3 text-gray-300 md:opacity-0 md:group-hover/date:opacity-100 transition-opacity" />
                 </button>
               </PopoverTrigger>
-              <PopoverContent
+              {/* Pass to tomorrow button */}
+                      <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 rounded-none hover:bg-orange-100 hover:text-orange-700"
+                                  onClick={(e) => { e.stopPropagation(); onUpdate(task.id, { date: formatDate(new Date(new Date().getTime() + 86400000)) }); }}
+                                  onPointerDown={(e) => e.stopPropagation()}
+                                  data-testid={`btn-tomorrow-${task.id}`}
+                                >
+                                <ArrowRightLeft className="h-3 w-3" />
+                      </Button>Button>              <PopoverContent
                 className="w-auto p-0"
                 align="end"
                 onPointerDown={(e) => e.stopPropagation()}
