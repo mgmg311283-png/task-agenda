@@ -3,7 +3,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Check, Trash2, ArrowRightLeft, Pencil, CalendarIcon } from "lucide-react";
+import { Check, Trash2, ArrowRightLeft, Pencil, CalendarIcon, ChevronRight } from "lucide-react";
 import { Task } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useState } from 'react';
@@ -42,6 +42,14 @@ function formatDate(date: Date): string {
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const y = String(date.getFullYear()).slice(-2);
   return `${d}/${m}/${y}`;
+}
+
+function advanceOneDay(dateStr: string): string {
+  const base = parseDateStr(dateStr);
+  const from = base || new Date();
+  const next = new Date(from);
+  next.setDate(next.getDate() + 1);
+  return formatDate(next);
 }
 
 function getColumnForTask(task: Task): string {
@@ -187,7 +195,7 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps
             )}
           </div>
 
-          {/* Footer Metadata: person + date */}
+          {/* Footer Metadata: person + date + +1d */}
           <div className="flex items-center gap-2 mt-3 text-xs">
 
             {/* Person dropdown */}
@@ -209,6 +217,14 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => e.stopPropagation()}
               >
+                <DropdownMenuItem
+                  key="none"
+                  onClick={() => onUpdate(task.id, { person: '' })}
+                  className="font-mono text-xs cursor-pointer text-gray-400 italic"
+                  data-testid={`person-none-${task.id}`}
+                >
+                  sin asignar
+                </DropdownMenuItem>
                 {PERSONAS.map((persona) => (
                   <DropdownMenuItem
                     key={persona}
@@ -262,6 +278,21 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps
                 />
               </PopoverContent>
             </Popover>
+
+            {/* +1 day button */}
+            <button
+              className="font-mono text-xs text-gray-400 hover:text-gray-700 hover:bg-gray-100 px-1 rounded-none transition-colors flex items-center gap-0.5 md:opacity-0 md:group-hover:opacity-100"
+              onClick={(e) => {
+                e.stopPropagation();
+                onUpdate(task.id, { date: advanceOneDay(task.date) });
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              title="Mover al día siguiente"
+              data-testid={`btn-plus1d-${task.id}`}
+            >
+              <ChevronRight className="w-3 h-3" />
+              <span>1d</span>
+            </button>
 
           </div>
 
