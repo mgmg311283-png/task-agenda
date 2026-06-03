@@ -303,6 +303,19 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps
               <ChevronRight className="w-3 h-3" />
               <span>1d</span>
             </button>
+      {/* +7 days button */}
+      <Button
+        onClick={(e) => {
+          e.stopPropagation();
+          onUpdate(task.id, { date: advanceOneDay(task.date, 7) });
+        }}
+        onPointerDown={(e) => e.stopPropagation()}
+        title="Mover una semana"
+        data-testid={`btn-plus7d-${task.id}`}
+      >
+        <ChevronRight className="w-3 h-3" />
+        <span>7d</span>
+      </Button>
 
           </div>
 
