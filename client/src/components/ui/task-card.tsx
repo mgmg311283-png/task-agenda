@@ -3,7 +3,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Check, Trash2, ArrowRightLeft, Pencil, CalendarIcon, ChevronRight } from "lucide-react";
+import { Check, Trash2, ArrowRightLeft, Pencil, CalendarIcon, ChevronRight, GripVertical } from "lucide-react";
 import { Task } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useState } from 'react';
@@ -87,7 +87,7 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps
   const currentColumn = getColumnForTask(task);
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="touch-manipulation mb-3">
+    <div ref={setNodeRef} style={style} className="touch-manipulation mb-3">
       <Card
         className="rounded-none border-t-0 border-x-0 border-b shadow-none hover:bg-muted/30 transition-colors group"
         data-testid={`card-task-${task.id}`}
@@ -97,8 +97,16 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps
           {/* Header: id/badge on left, action buttons on right */}
           <div className="flex items-start justify-between gap-2 mb-2">
 
-            {/* Left: task id + urgent badge */}
+            {/* Left: drag handle + task id + urgent badge */}
             <span className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground flex-shrink-0 pt-0.5">
+              <span
+                {...attributes}
+                {...listeners}
+                className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 touch-none"
+                data-testid={`drag-handle-${task.id}`}
+              >
+                <GripVertical className="h-3.5 w-3.5" />
+              </span>
               #{task.id}
               {task.urgent && (
                 <Badge
