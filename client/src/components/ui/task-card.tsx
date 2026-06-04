@@ -88,20 +88,31 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="touch-manipulation mb-3">
-      <Card className="rounded-none border-t-0 border-x-0 border-b-1 shadow-none hover:bg-muted/30 transition-colors group" data-testid={`card-task-${task.id}`}>
+      <Card
+        className="rounded-none border-t-0 border-x-0 border-b shadow-none hover:bg-muted/30 transition-colors group"
+        data-testid={`card-task-${task.id}`}
+      >
         <CardContent className="p-3">
 
-          {/* Header Line */}
-          <div className="flex items-center justify-between text-xs font-mono text-muted-foreground mb-2">
-            <span className="flex items-center gap-2">
+          {/* Header: id/badge on left, action buttons on right */}
+          <div className="flex items-start justify-between gap-2 mb-2">
+
+            {/* Left: task id + urgent badge */}
+            <span className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground flex-shrink-0 pt-0.5">
               #{task.id}
               {task.urgent && (
-                <Badge variant="destructive" className="rounded-none text-[10px] h-4 px-1 uppercase tracking-tighter">
+                <Badge
+                  variant="destructive"
+                  className="rounded-none text-[10px] h-4 px-1 uppercase tracking-tighter"
+                >
                   Urgente
                 </Badge>
               )}
             </span>
-            <div className="flex gap-1  transition-opacity">
+
+            {/* Right: action buttons — always visible */}
+            <div className="flex gap-1 flex-shrink-0">
+
               {/* Move column dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -134,7 +145,7 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {/* Complete button */}
+              {/* Complete */}
               <Button
                 variant="ghost"
                 size="icon"
@@ -146,7 +157,7 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps
                 <Check className="h-3 w-3" />
               </Button>
 
-              {/* Delete button */}
+              {/* Delete */}
               <Button
                 variant="ghost"
                 size="icon"
@@ -157,6 +168,7 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps
               >
                 <Trash2 className="h-3 w-3" />
               </Button>
+
             </div>
           </div>
 
@@ -190,13 +202,13 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps
                 data-testid={`text-task-${task.id}`}
               >
                 {task.text}
-                <Pencil className="inline-block w-3 h-3 ml-1.5 text-gray-300 md:opacity-0 md:group-hover/text:opacity-100 transition-opacity align-text-bottom" />
+                <Pencil className="inline-block w-3 h-3 ml-1.5 text-gray-300 opacity-0 group-hover/text:opacity-100 transition-opacity align-text-bottom" />
               </p>
             )}
           </div>
 
-          {/* Footer Metadata: person + date + +1d */}
-          <div className="flex items-center gap-2 mt-3 text-xs">
+          {/* Footer: person + date + +1d */}
+          <div className="flex items-center gap-2 mt-2 text-xs flex-wrap">
 
             {/* Person dropdown */}
             <DropdownMenu>
@@ -218,7 +230,6 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps
                 onClick={(e) => e.stopPropagation()}
               >
                 <DropdownMenuItem
-                  key="none"
                   onClick={() => onUpdate(task.id, { person: '' })}
                   className="font-mono text-xs cursor-pointer text-gray-400 italic"
                   data-testid={`person-none-${task.id}`}
@@ -254,20 +265,10 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps
                   data-testid={`text-date-${task.id}`}
                 >
                   {task.date}
-                  <CalendarIcon className="w-3 h-3 text-gray-300 md:opacity-0 md:group-hover/date:opacity-100 transition-opacity" />
+                  <CalendarIcon className="w-3 h-3 text-gray-300 opacity-0 group-hover/date:opacity-100 transition-opacity" />
                 </button>
               </PopoverTrigger>
-              {/* Pass to tomorrow button */}
-                      <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-6 w-6 rounded-none hover:bg-orange-100 hover:text-orange-700"
-                                  onClick={(e) => { e.stopPropagation(); onUpdate(task.id, { date: formatDate(new Date(new Date().getTime() + 86400000)) }); }}
-                                  onPointerDown={(e) => e.stopPropagation()}
-                                  data-testid={`btn-tomorrow-${task.id}`}
-                                >
-                                <ArrowRightLeft className="h-3 w-3" />
-                      </Button>              <PopoverContent
+              <PopoverContent
                 className="w-auto p-0"
                 align="end"
                 onPointerDown={(e) => e.stopPropagation()}
@@ -291,7 +292,7 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps
 
             {/* +1 day button */}
             <button
-              className="font-mono text-xs text-gray-400 hover:text-gray-700 hover:bg-gray-100 px-1 rounded-none transition-colors flex items-center gap-0.5 "
+              className="font-mono text-xs text-gray-400 hover:text-gray-700 hover:bg-gray-100 px-1 rounded-none transition-colors flex items-center gap-0.5"
               onClick={(e) => {
                 e.stopPropagation();
                 onUpdate(task.id, { date: advanceOneDay(task.date) });
