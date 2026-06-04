@@ -3,7 +3,6 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { Task } from '@/lib/types';
 import { TaskCard } from './task-card';
 import { cn } from '@/lib/utils';
-import { ScrollArea } from './scroll-area';
 
 interface KanbanColumnProps {
   id: string;
@@ -44,8 +43,7 @@ export function KanbanColumn({ id, title, tasks, color, onComplete, onDelete, on
       </div>
 
       {/* Content */}
-      <div ref={setNodeRef} className="flex-1 overflow-hidden bg-gray-50/30">
-        <ScrollArea className="h-full">
+      <div ref={setNodeRef} className="flex-1 overflow-y-auto overflow-x-hidden bg-gray-50/30">
             <div className="p-3 pb-20">
                 <SortableContext items={tasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
                 <div className="min-h-[100px] space-y-3">
@@ -67,7 +65,6 @@ export function KanbanColumn({ id, title, tasks, color, onComplete, onDelete, on
                 </div>
                 </SortableContext>
             </div>
-        </ScrollArea>
       </div>
     </div>
   );
