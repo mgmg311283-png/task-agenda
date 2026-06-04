@@ -94,31 +94,33 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps
       >
         <CardContent className="p-3">
 
-          {/* Header: id/badge on left, action buttons on right */}
-          <div className="flex items-start justify-between gap-2 mb-2">
+          {/* Header: grip | id+badge (flexible) | buttons (fixed) */}
+          <div className="flex items-center gap-1 mb-2">
 
-            {/* Left: drag handle + task id + urgent badge */}
-            <span className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground flex-shrink-0 pt-0.5">
-              <span
-                {...attributes}
-                {...listeners}
-                className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 touch-none"
-                data-testid={`drag-handle-${task.id}`}
-              >
-                <GripVertical className="h-3.5 w-3.5" />
-              </span>
+            {/* Drag handle — fixed width */}
+            <span
+              {...attributes}
+              {...listeners}
+              className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 touch-none flex-shrink-0"
+              data-testid={`drag-handle-${task.id}`}
+            >
+              <GripVertical className="h-3.5 w-3.5" />
+            </span>
+
+            {/* ID + badge — takes all remaining space, truncates if needed */}
+            <span className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground flex-1 min-w-0">
               #{task.id}
               {task.urgent && (
                 <Badge
                   variant="destructive"
-                  className="rounded-none text-[10px] h-4 px-1 uppercase tracking-tighter"
+                  className="rounded-none text-[10px] h-4 px-1 uppercase tracking-tighter flex-shrink-0"
                 >
                   Urgente
                 </Badge>
               )}
             </span>
 
-            {/* Right: action buttons — always visible */}
+            {/* Action buttons — fixed width, always visible */}
             <div className="flex gap-1 flex-shrink-0">
 
               {/* Move column dropdown */}
