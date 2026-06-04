@@ -101,7 +101,7 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps
                 </Badge>
               )}
             </span>
-            <div className="flex gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+            <div className="flex gap-1  transition-opacity">
               {/* Move column dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -291,7 +291,7 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps
 
             {/* +1 day button */}
             <button
-              className="font-mono text-xs text-gray-400 hover:text-gray-700 hover:bg-gray-100 px-1 rounded-none transition-colors flex items-center gap-0.5 md:opacity-0 md:group-hover:opacity-100"
+              className="font-mono text-xs text-gray-400 hover:text-gray-700 hover:bg-gray-100 px-1 rounded-none transition-colors flex items-center gap-0.5 "
               onClick={(e) => {
                 e.stopPropagation();
                 onUpdate(task.id, { date: advanceOneDay(task.date) });
@@ -303,19 +303,6 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps
               <ChevronRight className="w-3 h-3" />
               <span>1d</span>
             </button>
-      {/* +7 days button */}
-      <Button
-        onClick={(e) => {
-          e.stopPropagation();
-          onUpdate(task.id, { date: advanceOneDay(task.date, 7) });
-        }}
-        onPointerDown={(e) => e.stopPropagation()}
-        title="Mover una semana"
-        data-testid={`btn-plus7d-${task.id}`}
-      >
-        <ChevronRight className="w-3 h-3" />
-        <span>7d</span>
-      </Button>
 
           </div>
 
