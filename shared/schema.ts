@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, serial, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, serial, boolean, timestamp, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -13,7 +13,12 @@ export const tasks = pgTable("tasks", {
   status: text("status").notNull().default("activa"), // activa | completada | eliminada
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (t) => [
+  index("tasks_status_idx").on(t.status),
+  index("tasks_person_idx").on(t.person),
+  index("tasks_date_idx").on(t.date),
+  index("tasks_updated_at_idx").on(t.updatedAt),
+]);
 
 export const logs = pgTable("logs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

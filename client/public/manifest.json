@@ -1,0 +1,18 @@
+{
+  "name": "Focus Task Agenda",
+  "short_name": "FOCUS",
+  "description": "Agenda de tareas personal con IA",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#000000",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

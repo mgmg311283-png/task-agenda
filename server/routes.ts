@@ -4,9 +4,16 @@ import { storage } from "./storage";
 import { insertTaskSchema, updateTaskSchema } from "@shared/schema";
 import { parse, isValid, isBefore, startOfDay, format } from "date-fns";
 import OpenAI from "openai";
+import rateLimit from "express-rate-limit";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
+});
+
+const parseRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: { message: "Demasiadas solicitudes. Esperá un minuto." },
 });
 
 function parseTaskDate(dateStr: string): Date | null {
@@ -216,9 +223,15 @@ export async function registerRoutes(
     res.json(logEntries);
   });
 
+  // ---- HEALTH ----
+
+  app.get("/api/health", (_req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
   // ---- AI PARSE ----
 
-  app.post("/api/parse", async (req, res) => {
+  app.post("/api/parse", parseRateLimit, async (req, res) => {
     try {
       const { text, existingTaskIds } = req.body;
       if (!text || typeof text !== "string") {

@@ -3,9 +3,11 @@ import { KanbanColumn } from './ui/kanban-column';
 import { useTasks } from '@/lib/task-context';
 import { Task, COLUMNS } from '@/lib/types';
 import { TaskCard } from './ui/task-card';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
+import { X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 function parseDateToSortKey(dateStr: string): number {
     if (dateStr === 'a definir') return -1;
@@ -18,9 +20,10 @@ function parseDateToSortKey(dateStr: string): number {
     return year * 10000 + month * 100 + day;
 }
 
-function getSortedTasks(tasks: Task[], columnId: string): Task[] {
+function getSortedTasks(tasks: Task[], columnId: string, personFilter: string): Task[] {
     const colTasks = tasks.filter(t => {
         if (t.status !== 'activa') return false;
+        if (personFilter && t.person.toLowerCase() !== personFilter.toLowerCase()) return false;
         if (columnId === 'urgent') return t.urgent;
         if (columnId === 'action') return !t.urgent && (t.type === 'accion' || t.type === 'a_definir');
         if (columnId === 'think') return !t.urgent && t.type === 'para_pensar';
@@ -57,6 +60,7 @@ export function KanbanBoard() {
   const { state, dispatch } = useTasks();
   const [activeId, setActiveId] = useState<number | null>(null);
   const [mobileTab, setMobileTab] = useState<string>('urgent');
+  const [personFilter, setPersonFilter] = useState<string>('');
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -74,7 +78,7 @@ export function KanbanBoard() {
     if (!over) return;
 
     let targetColumnId = over.id as string;
-    
+
     if (typeof over.id === 'number') {
        if (over.data.current?.sortable?.containerId) {
            targetColumnId = over.data.current.sortable.containerId;
@@ -88,7 +92,7 @@ export function KanbanBoard() {
              else if (overTask.type === 'para_pensar') targetColumnId = 'think';
              else targetColumnId = 'action';
         } else {
-            return; 
+            return;
         }
     }
 
@@ -114,20 +118,76 @@ export function KanbanBoard() {
 
   const activeTask = activeId ? state.tasks.find(t => t.id === activeId) : null;
 
+  // Unique persons from active tasks
+  const persons = useMemo(() => {
+    const set = new Set<string>();
+    state.tasks.forEach(t => {
+      if (t.status === 'activa' && t.person && t.person !== 'a definir') {
+        set.add(t.person);
+      }
+    });
+    return Array.from(set).sort();
+  }, [state.tasks]);
+
+  const filteredTasks = personFilter
+    ? state.tasks.filter(t => t.status === 'activa' && t.person.toLowerCase() === personFilter.toLowerCase())
+    : state.tasks;
+
   const columnCounts = COLUMNS.reduce((acc, col) => {
-    acc[col.id] = getSortedTasks(state.tasks, col.id).length;
+    acc[col.id] = getSortedTasks(state.tasks, col.id, personFilter).length;
     return acc;
   }, {} as Record<string, number>);
 
+  const onComplete = (id: number) => dispatch({ type: 'COMPLETE_TASK', payload: { id }, source: 'UI' });
+  const onDelete = (id: number) => dispatch({ type: 'DELETE_TASK', payload: { id }, source: 'UI' });
+  const onUpdate = (id: number, data: Partial<Task>) => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: data }, source: 'UI' });
+  const onDuplicate = (task: Task) => dispatch({
+    type: 'ADD_TASK',
+    payload: { text: task.text, date: task.date, person: task.person, type: task.type, urgent: task.urgent, status: 'activa' },
+    source: 'UI',
+  });
+
   return (
-    <DndContext 
-        sensors={sensors} 
-        collisionDetection={closestCorners} 
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCorners}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
     >
+      {/* Person filter bar */}
+      {persons.length > 0 && (
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-background overflow-x-auto shrink-0">
+          <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider shrink-0">Filtrar:</span>
+          {persons.map(person => (
+            <button
+              key={person}
+              onClick={() => setPersonFilter(personFilter === person ? '' : person)}
+              className={cn(
+                "text-xs font-mono px-2 py-0.5 border transition-colors shrink-0",
+                personFilter === person
+                  ? "bg-foreground text-background border-foreground"
+                  : "bg-background text-muted-foreground border-border hover:border-foreground hover:text-foreground"
+              )}
+            >
+              {person}
+            </button>
+          ))}
+          {personFilter && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-5 w-5 shrink-0"
+              onClick={() => setPersonFilter('')}
+              title="Limpiar filtro"
+            >
+              <X className="w-3 h-3" />
+            </Button>
+          )}
+        </div>
+      )}
+
       {/* Mobile Tab Bar */}
-      <div className="flex md:hidden border-b border-border bg-white sticky top-0 z-20" data-testid="mobile-tab-bar">
+      <div className="flex md:hidden border-b border-border bg-background sticky top-0 z-20" data-testid="mobile-tab-bar">
         {COLUMNS.map(col => {
           const colors = TAB_COLORS[col.id as keyof typeof TAB_COLORS];
           const isActive = mobileTab === col.id;
@@ -157,48 +217,52 @@ export function KanbanBoard() {
       </div>
 
       {/* Desktop: All columns side by side */}
-      <div className="hidden md:flex h-full overflow-hidden bg-gray-100/50">
+      <div className="hidden md:flex h-full overflow-hidden bg-muted/30">
         {COLUMNS.map(col => (
           <KanbanColumn
             key={col.id}
             id={col.id}
             title={col.title}
-            tasks={getSortedTasks(state.tasks, col.id)}
+            tasks={getSortedTasks(state.tasks, col.id, personFilter)}
             color={col.color as any}
-            onComplete={(id) => dispatch({ type: 'COMPLETE_TASK', payload: { id }, source: 'UI' })}
-            onDelete={(id) => dispatch({ type: 'DELETE_TASK', payload: { id }, source: 'UI' })}
-            onUpdate={(id, data) => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: data }, source: 'UI' })}
+            isLoading={state.isLoading}
+            onComplete={onComplete}
+            onDelete={onDelete}
+            onUpdate={onUpdate}
+            onDuplicate={onDuplicate}
           />
         ))}
       </div>
 
-      {/* Mobile: Only show the active tab's column */}
-      <div className="flex md:hidden h-full overflow-hidden bg-gray-100/50">
+      {/* Mobile: Active tab column only */}
+      <div className="flex md:hidden h-full overflow-hidden bg-muted/30">
         {COLUMNS.filter(col => col.id === mobileTab).map(col => (
           <KanbanColumn
             key={col.id}
             id={col.id}
             title={col.title}
-            tasks={getSortedTasks(state.tasks, col.id)}
+            tasks={getSortedTasks(state.tasks, col.id, personFilter)}
             color={col.color as any}
-            onComplete={(id) => dispatch({ type: 'COMPLETE_TASK', payload: { id }, source: 'UI' })}
-            onDelete={(id) => dispatch({ type: 'DELETE_TASK', payload: { id }, source: 'UI' })}
-            onUpdate={(id, data) => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: data }, source: 'UI' })}
+            isLoading={state.isLoading}
+            onComplete={onComplete}
+            onDelete={onDelete}
+            onUpdate={onUpdate}
+            onDuplicate={onDuplicate}
           />
         ))}
       </div>
-      
+
       {createPortal(
         <DragOverlay>
           {activeTask ? (
-             <div className="opacity-90 rotate-2 scale-105 cursor-grabbing w-[300px]">
-                <TaskCard 
-                    task={activeTask} 
-                    onComplete={() => {}} 
-                    onDelete={() => {}} 
-                    onUpdate={() => {}}
-                />
-             </div>
+            <div className="opacity-90 rotate-2 scale-105 cursor-grabbing w-[300px]">
+              <TaskCard
+                task={activeTask}
+                onComplete={() => {}}
+                onDelete={() => {}}
+                onUpdate={() => {}}
+              />
+            </div>
           ) : null}
         </DragOverlay>,
         document.body

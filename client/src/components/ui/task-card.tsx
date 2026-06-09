@@ -3,10 +3,11 @@ import { CSS } from '@dnd-kit/utilities';
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Check, Trash2, ArrowRightLeft, Pencil, CalendarIcon, ChevronRight, GripVertical } from "lucide-react";
+import { Check, Trash2, ArrowRightLeft, Pencil, CalendarIcon, ChevronRight, GripVertical, Copy, Zap } from "lucide-react";
 import { Task } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useState } from 'react';
+import { toast } from "@/hooks/use-toast";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,6 +23,7 @@ interface TaskCardProps {
   onComplete: (id: number) => void;
   onDelete: (id: number) => void;
   onUpdate: (id: number, data: Partial<Task>) => void;
+  onDuplicate?: (task: Task) => void;
 }
 
 function parseDateStr(dateStr: string): Date | undefined {
@@ -66,7 +68,16 @@ const MOVE_OPTIONS = [
 
 const PERSONAS = ['mariano', 'aldana', 'Alejandro', 'Enzo', 'penso', 'Daniel', 'Carla', 'Cebrero', 'Marcos', 'Gonzalo'];
 
-export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps) {
+function isOverdue(dateStr: string): boolean {
+  if (!dateStr || dateStr === 'a definir') return false;
+  const d = parseDateStr(dateStr);
+  if (!d) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return d < today;
+}
+
+export function TaskCard({ task, onComplete, onDelete, onUpdate, onDuplicate }: TaskCardProps) {
   const {
     attributes,
     listeners,
@@ -85,29 +96,38 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps
   const [isEditingText, setIsEditingText] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const currentColumn = getColumnForTask(task);
+  const overdue = isOverdue(task.date);
+
+  const copyToClipboard = () => {
+    const text = `[#${task.id}] ${task.text} — ${task.date} — ${task.person}`;
+    navigator.clipboard.writeText(text).then(() => {
+      toast({ title: "Copiado", description: text, duration: 2000 });
+    });
+  };
 
   return (
     <div ref={setNodeRef} style={style} className="touch-manipulation mb-3">
       <Card
-        className="rounded-none border-t-0 border-x-0 border-b shadow-none hover:bg-muted/30 transition-colors group"
+        className={cn(
+          "rounded-none border-t-0 border-x-0 border-b shadow-none hover:bg-muted/30 transition-colors group",
+          overdue && "border-l-2 border-l-orange-400"
+        )}
         data-testid={`card-task-${task.id}`}
       >
         <CardContent className="p-3">
 
-          {/* Header: grip | id+badge (flexible) | buttons (fixed) */}
+          {/* Header */}
           <div className="flex items-center gap-1 mb-2">
 
-            {/* Drag handle — fixed width */}
             <span
               {...attributes}
               {...listeners}
-              className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 touch-none flex-shrink-0"
+              className="cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground touch-none flex-shrink-0"
               data-testid={`drag-handle-${task.id}`}
             >
               <GripVertical className="h-3.5 w-3.5" />
             </span>
 
-            {/* ID + badge — takes all remaining space, truncates if needed */}
             <span className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground flex-1 min-w-0">
               #{task.id}
               {task.urgent && (
@@ -118,18 +138,42 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps
                   Urgente
                 </Badge>
               )}
+              {overdue && !task.urgent && (
+                <span className="text-[10px] text-orange-500 font-mono shrink-0">vencida</span>
+              )}
             </span>
 
-            {/* Action buttons — fixed width, always visible */}
+            {/* Action buttons */}
             <div className="flex gap-1 flex-shrink-0">
 
-              {/* Move column dropdown */}
+              {/* Toggle urgente */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  "h-6 w-6 rounded-none",
+                  task.urgent
+                    ? "text-orange-500 bg-orange-50 hover:bg-orange-100 dark:bg-orange-950"
+                    : "hover:bg-orange-50 hover:text-orange-500 opacity-0 group-hover:opacity-100"
+                )}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onUpdate(task.id, { urgent: !task.urgent });
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                title={task.urgent ? "Quitar urgente" : "Marcar urgente"}
+                data-testid={`btn-urgent-${task.id}`}
+              >
+                <Zap className="h-3 w-3" />
+              </Button>
+
+              {/* Move column */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-6 w-6 rounded-none hover:bg-purple-100 hover:text-purple-700"
+                    className="h-6 w-6 rounded-none hover:bg-purple-100 hover:text-purple-700 opacity-0 group-hover:opacity-100"
                     onClick={(e) => e.stopPropagation()}
                     onPointerDown={(e) => e.stopPropagation()}
                     data-testid={`btn-move-${task.id}`}
@@ -152,6 +196,20 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps
                       <span>{opt.label}</span>
                     </DropdownMenuItem>
                   ))}
+                  <DropdownMenuItem
+                    onClick={(e) => { e.stopPropagation(); copyToClipboard(); }}
+                    className="font-mono text-xs gap-2 cursor-pointer"
+                  >
+                    <Copy className="h-3 w-3" /> Copiar texto
+                  </DropdownMenuItem>
+                  {onDuplicate && (
+                    <DropdownMenuItem
+                      onClick={(e) => { e.stopPropagation(); onDuplicate(task); }}
+                      className="font-mono text-xs gap-2 cursor-pointer"
+                    >
+                      + Duplicar tarea
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
 
@@ -163,6 +221,7 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps
                 onClick={(e) => { e.stopPropagation(); onComplete(task.id); }}
                 onPointerDown={(e) => e.stopPropagation()}
                 data-testid={`btn-complete-${task.id}`}
+                title="Completar"
               >
                 <Check className="h-3 w-3" />
               </Button>
@@ -171,10 +230,11 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6 rounded-none hover:bg-red-100 hover:text-red-700"
+                className="h-6 w-6 rounded-none hover:bg-red-100 hover:text-red-700 opacity-0 group-hover:opacity-100"
                 onClick={(e) => { e.stopPropagation(); onDelete(task.id); }}
                 onPointerDown={(e) => e.stopPropagation()}
                 data-testid={`btn-delete-${task.id}`}
+                title="Eliminar"
               >
                 <Trash2 className="h-3 w-3" />
               </Button>
@@ -182,11 +242,11 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps
             </div>
           </div>
 
-          {/* Body - Editable text */}
+          {/* Editable text */}
           <div className="mb-2">
             {isEditingText ? (
               <input
-                className="w-full bg-transparent border-b border-dashed border-gray-400 font-sans font-medium text-sm focus:outline-none"
+                className="w-full bg-transparent border-b border-dashed border-muted-foreground font-sans font-medium text-sm focus:outline-none"
                 defaultValue={task.text}
                 autoFocus
                 data-testid={`input-text-${task.id}`}
@@ -212,12 +272,12 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps
                 data-testid={`text-task-${task.id}`}
               >
                 {task.text}
-                <Pencil className="inline-block w-3 h-3 ml-1.5 text-gray-300 opacity-0 group-hover/text:opacity-100 transition-opacity align-text-bottom" />
+                <Pencil className="inline-block w-3 h-3 ml-1.5 text-muted-foreground/30 opacity-0 group-hover/text:opacity-100 transition-opacity align-text-bottom" />
               </p>
             )}
           </div>
 
-          {/* Footer: person + date + +1d */}
+          {/* Footer */}
           <div className="flex items-center gap-2 mt-2 text-xs flex-wrap">
 
             {/* Person dropdown */}
@@ -225,7 +285,7 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps
               <DropdownMenuTrigger asChild>
                 <Badge
                   variant="outline"
-                  className="rounded-none border-gray-200 text-gray-500 font-normal px-1.5 h-5 cursor-pointer hover:border-gray-400 hover:text-gray-700 transition-colors"
+                  className="rounded-none border-border text-muted-foreground font-normal px-1.5 h-5 cursor-pointer hover:border-foreground hover:text-foreground transition-colors"
                   onClick={(e) => e.stopPropagation()}
                   onPointerDown={(e) => e.stopPropagation()}
                   data-testid={`badge-person-${task.id}`}
@@ -240,8 +300,8 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps
                 onClick={(e) => e.stopPropagation()}
               >
                 <DropdownMenuItem
-                  onClick={() => onUpdate(task.id, { person: '' })}
-                  className="font-mono text-xs cursor-pointer text-gray-400 italic"
+                  onClick={() => onUpdate(task.id, { person: 'a definir' })}
+                  className="font-mono text-xs cursor-pointer text-muted-foreground italic"
                   data-testid={`person-none-${task.id}`}
                 >
                   sin asignar
@@ -268,14 +328,15 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps
                 <button
                   className={cn(
                     "font-mono tracking-tight text-xs flex items-center gap-1 cursor-pointer hover:text-foreground transition-colors group/date",
-                    task.date === 'a definir' ? "text-gray-400 italic" : "text-gray-600"
+                    task.date === 'a definir' ? "text-muted-foreground italic" :
+                    overdue ? "text-orange-500 font-semibold" : "text-muted-foreground"
                   )}
                   onClick={(e) => e.stopPropagation()}
                   onPointerDown={(e) => e.stopPropagation()}
                   data-testid={`text-date-${task.id}`}
                 >
                   {task.date}
-                  <CalendarIcon className="w-3 h-3 text-gray-300 opacity-0 group-hover/date:opacity-100 transition-opacity" />
+                  <CalendarIcon className="w-3 h-3 opacity-0 group-hover/date:opacity-100 transition-opacity" />
                 </button>
               </PopoverTrigger>
               <PopoverContent
@@ -300,9 +361,9 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate }: TaskCardProps
               </PopoverContent>
             </Popover>
 
-            {/* +1 day button */}
+            {/* +1 day */}
             <button
-              className="font-mono text-xs text-gray-400 hover:text-gray-700 hover:bg-gray-100 px-1 rounded-none transition-colors flex items-center gap-0.5"
+              className="font-mono text-xs text-muted-foreground hover:text-foreground hover:bg-muted px-1 rounded-none transition-colors flex items-center gap-0.5"
               onClick={(e) => {
                 e.stopPropagation();
                 onUpdate(task.id, { date: advanceOneDay(task.date) });

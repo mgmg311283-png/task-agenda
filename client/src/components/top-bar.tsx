@@ -1,10 +1,12 @@
 import { Button } from "@/components/ui/button";
-import { Download, Upload, Trash, CalendarClock, History, BarChart3, X } from "lucide-react";
+import { Download, Upload, Trash, CalendarClock, History, BarChart3, Moon, Sun, AlertTriangle } from "lucide-react";
 import { useTasks } from "@/lib/task-context";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import Papa from 'papaparse';
 import { toast } from "@/hooks/use-toast";
 import { Task, TaskStatus } from "@/lib/types";
+import { isTaskOverdue } from "@/lib/parser";
+import { useTheme } from "next-themes";
 import {
   Dialog,
   DialogContent,
@@ -13,18 +15,19 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogClose
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { format } from "date-fns";
 
 export function TopBar() {
   const { state, dispatch, moveExpiredAsync } = useTasks();
   const [csvContent, setCsvContent] = useState("");
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const { theme, setTheme } = useTheme();
+  const [location] = useLocation();
 
   const handleExport = () => {
-    // FECHA,NUMERO,TAREA,PERSONA,TIPO,URGENTE
     const activeTasks = state.tasks.filter(t => t.status === 'activa');
     const csvData = activeTasks.map(t => ({
         FECHA: t.date,
@@ -34,7 +37,6 @@ export function TopBar() {
         TIPO: t.type,
         URGENTE: t.urgent ? 'urgente' : ''
     }));
-    
     const csv = Papa.unparse(csvData);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -48,7 +50,6 @@ export function TopBar() {
 
   const handlePasteImport = () => {
     if (!csvContent.trim()) return;
-
     Papa.parse(csvContent, {
         header: true,
         skipEmptyLines: true,
@@ -56,23 +57,21 @@ export function TopBar() {
             const tasks: Task[] = results.data.map((row: any) => {
                 let type: any = 'a_definir';
                 const rowType = row.TIPO ? row.TIPO.toLowerCase().trim() : '';
-                
                 if (rowType === 'accion' || rowType === 'acción') type = 'accion';
                 else if (rowType === 'para_pensar' || rowType === 'para pensar' || rowType === 'pensar') type = 'para_pensar';
                 else if (rowType === 'a_definir' || rowType === 'a definir') type = 'a_definir';
-
                 return {
-                    id: 0, // Will be overwritten by reducer
+                    id: 0,
                     date: row.FECHA || 'a definir',
                     text: row.TAREA || 'Sin título',
                     person: row.PERSONA || 'a definir',
-                    type: type,
+                    type,
                     urgent: row.URGENTE === 'urgente',
                     status: 'activa' as TaskStatus,
                     createdAt: new Date().toISOString(),
                     updatedAt: new Date().toISOString()
                 };
-            }).filter((t: any) => t.text); // Filter empty rows
+            }).filter((t: any) => t.text);
 
             if (tasks.length > 0) {
                 dispatch({ type: 'IMPORT_CSV', payload: tasks, source: 'Import' });
@@ -80,7 +79,7 @@ export function TopBar() {
                 setIsImportOpen(false);
                 setCsvContent("");
             } else {
-                toast({ variant: "destructive", title: "Error", description: "No se encontraron tareas válidas en el texto pegado." });
+                toast({ variant: "destructive", title: "Error", description: "No se encontraron tareas válidas." });
             }
         },
         error: (err: any) => {
@@ -89,103 +88,208 @@ export function TopBar() {
     });
   };
 
+  const overdueCount = useMemo(
+    () => state.tasks.filter(t => t.status === 'activa' && isTaskOverdue(t.date)).length,
+    [state.tasks]
+  );
+
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const completedToday = useMemo(
+    () => state.allTasks.filter(t => {
+      if (t.status !== 'completada') return false;
+      try {
+        return t.updatedAt.startsWith(todayStr);
+      } catch {
+        return false;
+      }
+    }).length,
+    [state.allTasks, todayStr]
+  );
+
+  const totalActive = state.tasks.filter(t => t.status === 'activa').length;
+  const progressPct = totalActive + completedToday > 0
+    ? Math.round((completedToday / (totalActive + completedToday)) * 100)
+    : 0;
+
+  const navLinks = [
+    { href: '/', label: 'TABLERO' },
+    { href: '/log', label: 'HISTORIAL', icon: <History className="w-3 h-3" /> },
+    { href: '/metrics', label: 'REPORTES', icon: <BarChart3 className="w-3 h-3" /> },
+  ];
+
   return (
-    <header className="border-b border-border bg-white px-4 py-2 flex items-center justify-between sticky top-0 z-50 shadow-sm">
+    <header className="border-b border-border bg-background sticky top-0 z-50 shadow-sm">
+      {/* Progress bar */}
+      {progressPct > 0 && (
+        <div className="h-0.5 bg-muted w-full">
+          <div
+            className="h-full bg-green-500 transition-all duration-500"
+            style={{ width: `${progressPct}%` }}
+          />
+        </div>
+      )}
+
+      <div className="px-4 py-2 flex items-center justify-between">
         <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
             <h1 className="font-bold text-lg tracking-tight">FOCUS<span className="font-mono text-primary/50 text-xs ml-1">v1.0</span></h1>
-            
-            <nav className="hidden md:flex items-center gap-1 ml-4 border-l pl-4 h-6">
-                <Link href="/">
-                    <Button variant="ghost" size="sm" className="h-7 text-xs rounded-none font-medium text-gray-500 hover:text-black hover:bg-gray-100">TABLERO</Button>
-                </Link>
-                <Link href="/log">
-                    <Button variant="ghost" size="sm" className="h-7 text-xs rounded-none font-medium text-gray-500 hover:text-black hover:bg-gray-100">
-                        <History className="w-3 h-3 mr-1" /> HISTORIAL
-                    </Button>
-                </Link>
-                <Link href="/metrics">
-                    <Button variant="ghost" size="sm" className="h-7 text-xs rounded-none font-medium text-gray-500 hover:text-black hover:bg-gray-100">
-                        <BarChart3 className="w-3 h-3 mr-1" /> REPORTES
-                    </Button>
-                </Link>
-            </nav>
+            {completedToday > 0 && (
+              <span className="text-[10px] font-mono bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 px-1.5 py-0.5 rounded-full">
+                +{completedToday} hoy
+              </span>
+            )}
+          </div>
+
+          <nav className="hidden md:flex items-center gap-1 ml-4 border-l pl-4 h-6">
+            {navLinks.map(({ href, label, icon }) => (
+              <Link key={href} href={href}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={`h-7 text-xs rounded-none font-medium flex items-center gap-1 ${
+                    location === href
+                      ? 'text-black dark:text-white font-bold bg-muted'
+                      : 'text-gray-500 hover:text-black dark:hover:text-white hover:bg-muted'
+                  }`}
+                >
+                  {icon}
+                  {label}
+                </Button>
+              </Link>
+            ))}
+          </nav>
         </div>
 
         <div className="flex items-center gap-1">
-            <Button 
-                variant="outline" 
-                size="sm" 
-                className="h-8 text-xs hidden sm:flex gap-1 border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 hover:text-orange-800" 
-                onClick={async () => {
-                    try {
-                        const result = await moveExpiredAsync('UI');
-                        if (result.moved > 0) {
-                            toast({ title: "Vencidas Actualizadas", description: `Se movieron ${result.moved} tarea(s) a hoy (${result.date}).` });
-                        } else {
-                            toast({ title: "Sin cambios", description: "No hay tareas vencidas para mover." });
-                        }
-                    } catch {
-                        toast({ variant: "destructive", title: "Error", description: "No se pudieron mover las tareas vencidas." });
-                    }
-                }}
-            >
-                <CalendarClock className="w-3 h-3" /> Vencidas a Hoy
-            </Button>
-            
-            <div className="h-4 w-px bg-border mx-1 hidden sm:block"></div>
-
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleExport} title="Exportar CSV">
-                <Download className="w-4 h-4" />
-            </Button>
-            
-            <Dialog open={isImportOpen} onOpenChange={setIsImportOpen}>
-                <DialogTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Importar (Pegar CSV)">
-                        <Upload className="w-4 h-4" />
-                    </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                        <DialogTitle>Importar Tareas (CSV)</DialogTitle>
-                        <DialogDescription className="space-y-2">
-                            <p>Copia y pega tus tareas desde Excel o Sheets. El sistema es flexible, pero intenta seguir este orden de columnas para mejor resultado:</p>
-                            <div className="bg-muted p-2 rounded text-xs font-mono border border-border">
-                                FECHA, TAREA, PERSONA, TIPO, URGENTE
-                            </div>
-                            <ul className="text-xs list-disc list-inside text-muted-foreground">
-                                <li><strong>FECHA:</strong> dd/mm/yy o "a definir"</li>
-                                <li><strong>TIPO:</strong> "accion", "pensar" o "a definir"</li>
-                                <li><strong>URGENTE:</strong> "urgente" o dejar vacío</li>
-                            </ul>
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                        <Textarea 
-                            placeholder={`Ejemplo de formato:\n\n12/03/24, Comprar pan, Mariano, accion,\n, Llamar a proveedor, Aldana, accion, urgente\na definir, Pensar estrategia, Yo, pensar,`}
-                            className="h-[200px] font-mono text-xs leading-relaxed"
-                            value={csvContent}
-                            onChange={(e) => setCsvContent(e.target.value)}
-                        />
-                    </div>
-                    <DialogFooter className="sm:justify-between">
-                         <Button type="button" variant="secondary" onClick={() => setIsImportOpen(false)}>
-                            Cancelar
-                        </Button>
-                        <Button type="button" onClick={handlePasteImport} disabled={!csvContent.trim()}>
-                            Importar Tareas
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-            
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50" title="Eliminar todas activas" onClick={() => {
-                if(confirm("¿Seguro que quieres eliminar TODAS las tareas activas?")) {
-                    dispatch({ type: 'DELETE_ALL_ACTIVE', source: 'UI' });
+          {overdueCount > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs gap-1 border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 dark:border-orange-800 dark:bg-orange-950 dark:text-orange-300"
+              onClick={async () => {
+                try {
+                  const result = await moveExpiredAsync('UI');
+                  if (result.moved > 0) {
+                    toast({ title: "Vencidas actualizadas", description: `${result.moved} tarea(s) movidas a hoy (${result.date}).` });
+                  } else {
+                    toast({ title: "Sin cambios", description: "No hay tareas vencidas." });
+                  }
+                } catch {
+                  toast({ variant: "destructive", title: "Error", description: "No se pudieron mover las tareas." });
                 }
-            }}>
-                <Trash className="w-4 h-4" />
+              }}
+            >
+              <AlertTriangle className="w-3 h-3" />
+              <span className="hidden sm:inline">Vencidas</span>
+              <span className="font-bold">{overdueCount}</span>
             </Button>
+          )}
+
+          {overdueCount === 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs hidden sm:flex gap-1 border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100"
+              onClick={async () => {
+                try {
+                  const result = await moveExpiredAsync('UI');
+                  if (result.moved > 0) {
+                    toast({ title: "Vencidas actualizadas", description: `${result.moved} tarea(s) movidas a hoy (${result.date}).` });
+                  } else {
+                    toast({ title: "Sin cambios", description: "No hay tareas vencidas para mover." });
+                  }
+                } catch {
+                  toast({ variant: "destructive", title: "Error", description: "No se pudieron mover las tareas." });
+                }
+              }}
+            >
+              <CalendarClock className="w-3 h-3" /> Vencidas a Hoy
+            </Button>
+          )}
+
+          <div className="h-4 w-px bg-border mx-1 hidden sm:block" />
+
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleExport} title="Exportar CSV">
+            <Download className="w-4 h-4" />
+          </Button>
+
+          <Dialog open={isImportOpen} onOpenChange={setIsImportOpen}>
+            <DialogTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8" title="Importar (Pegar CSV)">
+                <Upload className="w-4 h-4" />
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Importar Tareas (CSV)</DialogTitle>
+                <DialogDescription className="space-y-2">
+                  <p>Pegá tus tareas desde Excel o Sheets. Columnas esperadas:</p>
+                  <div className="bg-muted p-2 rounded text-xs font-mono border border-border">
+                    FECHA, TAREA, PERSONA, TIPO, URGENTE
+                  </div>
+                  <ul className="text-xs list-disc list-inside text-muted-foreground">
+                    <li><strong>FECHA:</strong> dd/mm/yy o "a definir"</li>
+                    <li><strong>TIPO:</strong> "accion", "pensar" o "a definir"</li>
+                    <li><strong>URGENTE:</strong> "urgente" o vacío</li>
+                  </ul>
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <Textarea
+                  placeholder={`Ejemplo:\n\n12/03/24, Comprar pan, Mariano, accion,\n, Llamar proveedor, Aldana, accion, urgente`}
+                  className="h-[200px] font-mono text-xs"
+                  value={csvContent}
+                  onChange={(e) => setCsvContent(e.target.value)}
+                />
+              </div>
+              <DialogFooter className="sm:justify-between">
+                <Button type="button" variant="secondary" onClick={() => setIsImportOpen(false)}>Cancelar</Button>
+                <Button type="button" onClick={handlePasteImport} disabled={!csvContent.trim()}>Importar</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            title={theme === 'dark' ? 'Modo claro' : 'Modo oscuro'}
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+          >
+            {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
+            title="Eliminar todas las activas"
+            onClick={() => {
+              if (confirm("¿Seguro que quieres eliminar TODAS las tareas activas?")) {
+                dispatch({ type: 'DELETE_ALL_ACTIVE', source: 'UI' });
+              }
+            }}
+          >
+            <Trash className="w-4 h-4" />
+          </Button>
         </div>
+      </div>
+
+      {/* Mobile nav */}
+      <div className="flex md:hidden border-t border-border">
+        {navLinks.map(({ href, label, icon }) => (
+          <Link key={href} href={href} className="flex-1">
+            <button
+              className={`w-full py-2 text-[10px] font-mono font-bold uppercase tracking-wider flex items-center justify-center gap-1 ${
+                location === href ? 'text-black dark:text-white border-b-2 border-black dark:border-white' : 'text-gray-400'
+              }`}
+            >
+              {icon}
+              {label}
+            </button>
+          </Link>
+        ))}
+      </div>
     </header>
   );
 }

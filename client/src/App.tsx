@@ -1,5 +1,6 @@
 import { Switch, Route } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
+import { ThemeProvider } from "next-themes";
 import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { TaskProvider } from "@/lib/task-context";
@@ -7,6 +8,7 @@ import { Dashboard } from "@/pages/dashboard";
 import { LogView } from "@/pages/log-view";
 import { MetricsView } from "@/pages/metrics-view";
 import NotFound from "@/pages/not-found";
+import { ErrorBoundary } from "@/components/error-boundary";
 
 function Router() {
   return (
@@ -21,12 +23,16 @@ function Router() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <TaskProvider>
-        <Router />
-        <Toaster />
-      </TaskProvider>
-    </QueryClientProvider>
+    <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+      <QueryClientProvider client={queryClient}>
+        <TaskProvider>
+          <ErrorBoundary>
+            <Router />
+          </ErrorBoundary>
+          <Toaster />
+        </TaskProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   );
 }
 
