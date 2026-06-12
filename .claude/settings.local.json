@@ -22,7 +22,10 @@
       "Bash(curl -s -X POST http://localhost:5001/api/tasks -H 'Content-Type: application/json' -d '{ *)",
       "Bash(pkill *)",
       "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(PORT=5000 NODE_ENV=production node dist/index.cjs)",
+      "Bash(curl -s http://localhost:5000/api/tasks)",
+      "Bash(git commit *)"
     ]
   },
   "model": "claude-haiku-4-5-20251001"
