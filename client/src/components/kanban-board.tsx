@@ -3,7 +3,7 @@ import { KanbanColumn } from './ui/kanban-column';
 import { useTasks } from '@/lib/task-context';
 import { Task, COLUMNS } from '@/lib/types';
 import { TaskCard } from './ui/task-card';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 import { X, Search, Eye, EyeOff, Grid3X3, List } from 'lucide-react';
@@ -73,6 +73,20 @@ export function KanbanBoard() {
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor)
   );
+
+  // Persist view preferences to localStorage
+  useEffect(() => {
+    localStorage.setItem('kanban-view-mode', viewMode);
+    localStorage.setItem('kanban-show-completed', String(showCompleted));
+  }, [viewMode, showCompleted]);
+
+  // Load view preferences from localStorage
+  useEffect(() => {
+    const savedViewMode = localStorage.getItem('kanban-view-mode') as 'grid' | 'list' | null;
+    const savedShowCompleted = localStorage.getItem('kanban-show-completed') === 'true';
+    if (savedViewMode) setViewMode(savedViewMode);
+    setShowCompleted(savedShowCompleted);
+  }, []);
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as number);

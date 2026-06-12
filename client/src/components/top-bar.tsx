@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Download, Upload, Trash, CalendarClock, History, BarChart3, Moon, Sun, AlertTriangle, RotateCcw, RotateCw, Plus, Settings } from "lucide-react";
+import { Download, Upload, Trash, CalendarClock, History, BarChart3, Moon, Sun, AlertTriangle, RotateCcw, RotateCw, Plus, Settings, Zap, Wifi } from "lucide-react";
 import { useTasks } from "@/lib/task-context";
 import { Link, useLocation } from "wouter";
 import Papa from 'papaparse';
@@ -26,6 +26,20 @@ export function TopBar() {
   const [isImportOpen, setIsImportOpen] = useState(false);
   const { theme, setTheme } = useTheme();
   const [location] = useLocation();
+  const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'offline'>('synced');
+
+  // Simulate sync status
+  React.useEffect(() => {
+    const handleOnline = () => setSyncStatus('synced');
+    const handleOffline = () => setSyncStatus('offline');
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    setSyncStatus(navigator.onLine ? 'synced' : 'offline');
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   const handleExport = () => {
     const activeTasks = state.tasks.filter(t => t.status === 'activa');
@@ -35,7 +49,8 @@ export function TopBar() {
         TAREA: t.text,
         PERSONA: t.person,
         TIPO: t.type,
-        URGENTE: t.urgent ? 'urgente' : ''
+        URGENTE: t.urgent ? 'urgente' : '',
+        PRIORIDAD: t.priority || 'normal'
     }));
     const csv = Papa.unparse(csvData);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -46,6 +61,7 @@ export function TopBar() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    toast({ title: "Exportado", description: `${activeTasks.length} tareas exportadas a CSV` });
   };
 
   const handlePasteImport = () => {
@@ -206,6 +222,24 @@ export function TopBar() {
               <CalendarClock className="w-3 h-3" /> Vencidas a Hoy
             </Button>
           )}
+
+          {/* Sync status indicator */}
+          <span
+            className="text-[10px] font-mono px-1.5 py-0.5 rounded border"
+            title={syncStatus === 'offline' ? 'Sin conexión' : 'Sincronizado'}
+          >
+            {syncStatus === 'offline' ? (
+              <>
+                <span className="inline-block w-2 h-2 bg-orange-500 rounded-full mr-1"></span>
+                Offline
+              </>
+            ) : (
+              <>
+                <span className="inline-block w-2 h-2 bg-green-500 rounded-full mr-1 animate-pulse"></span>
+                Sync
+              </>
+            )}
+          </span>
 
           <div className="h-4 w-px bg-border mx-1 hidden sm:block" />
 
