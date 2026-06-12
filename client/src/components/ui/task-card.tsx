@@ -3,7 +3,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Check, Trash2, ArrowRightLeft, Pencil, CalendarIcon, ChevronRight, GripVertical, Copy, Zap } from "lucide-react";
+import { Check, Trash2, ArrowRightLeft, Pencil, CalendarIcon, ChevronRight, GripVertical, Copy, Zap, AlertCircle, TrendingUp } from "lucide-react";
 import { Task } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useState } from 'react';
@@ -77,6 +77,16 @@ function isOverdue(dateStr: string): boolean {
   return d < today;
 }
 
+function isToday(dateStr: string): boolean {
+  if (!dateStr || dateStr === 'a definir') return false;
+  const d = parseDateStr(dateStr);
+  if (!d) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime() === today.getTime();
+}
+
 export function TaskCard({ task, onComplete, onDelete, onUpdate, onDuplicate }: TaskCardProps) {
   const {
     attributes,
@@ -97,6 +107,7 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate, onDuplicate }: 
   const [calendarOpen, setCalendarOpen] = useState(false);
   const currentColumn = getColumnForTask(task);
   const overdue = isOverdue(task.date);
+  const isTaskToday = isToday(task.date);
 
   const copyToClipboard = () => {
     const text = `[#${task.id}] ${task.text} — ${task.date} — ${task.person}`;
@@ -110,7 +121,8 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate, onDuplicate }: 
       <Card
         className={cn(
           "rounded-none border-t-0 border-x-0 border-b shadow-none hover:bg-muted/30 transition-colors group",
-          overdue && "border-l-2 border-l-orange-400"
+          overdue && "border-l-2 border-l-orange-400",
+          isTaskToday && "border-l-2 border-l-green-500 bg-green-50/30 dark:bg-green-950/20"
         )}
         data-testid={`card-task-${task.id}`}
       >
@@ -130,6 +142,12 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate, onDuplicate }: 
 
             <span className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground flex-1 min-w-0">
               #{task.id}
+              {task.priority === 'alta' && (
+                <TrendingUp className="h-3.5 w-3.5 text-red-500 flex-shrink-0" title="Alta prioridad" />
+              )}
+              {task.priority === 'baja' && (
+                <TrendingUp className="h-3.5 w-3.5 text-blue-500 rotate-180 flex-shrink-0" title="Baja prioridad" />
+              )}
               {task.urgent && (
                 <Badge
                   variant="destructive"

@@ -38,23 +38,43 @@ Two tables:
 - **tasks** — `id`, `text`, `date` (`"dd/MM/yy"` or `"a definir"`), `person`, `type` (`accion | para_pensar | a_definir`), `urgent` (boolean), `status` (`activa | completada | eliminada`). Deletions and completions are soft — they update `status`.
 - **logs** — Full audit trail. Every mutation writes a log entry with `source` (`UI | Chat | Audio | Import`), `originalValues`, and `newValues` as JSON strings.
 
-### Kanban column assignment logic (`client/src/components/kanban-board.tsx:22-28`)
+### Routing
 
-| Column | Filter condition |
+Uses **wouter** (not React Router). Three pages:
+- `/` — `Dashboard` (TopBar + KanbanBoard + ChatInterface)
+- `/log` — `LogView` (audit log table)
+- `/metrics` — `MetricsView` (charts)
+
+### Kanban column assignment logic (`client/src/components/kanban-board.tsx:23-31`)
+
+Column IDs in code are `urgent`, `action`, `think` (titles displayed are URGENTE, ACCION, PENSAR):
+
+| Column ID | Filter condition |
 |---|---|
-| URGENTE | `urgent === true` |
-| ACCION | `!urgent && (type === 'accion' \|\| type === 'a_definir')` |
-| PENSAR | `!urgent && type === 'para_pensar'` |
+| `urgent` | `urgent === true` |
+| `action` | `!urgent && (type === 'accion' \|\| type === 'a_definir')` |
+| `think` | `!urgent && type === 'para_pensar'` |
 
-Tasks within a column are sorted by date (ascending), then by person (`"a definir"` first, then `Mariano`/`Aldana`, then others), then by id.
+Tasks within a column are sorted by date (ascending, `"a definir"` first), then by person (`"a definir"` → Mariano/Aldana → others), then by id.
+
+Drag-and-drop (via `@dnd-kit/core`) between columns updates `urgent` and `type` automatically — dropping on `urgent` sets `urgent: true`; dropping on `action` sets `urgent: false, type: 'accion'`; dropping on `think` sets `urgent: false, type: 'para_pensar'`.
 
 ### Frontend state management
 
 `TaskProvider` (`client/src/lib/task-context.tsx`) wraps the whole app and exposes:
 - `state.tasks` / `state.allTasks` / `state.logs` — TanStack React Query queries that poll every 5–10 seconds
 - `dispatch(action)` — Translates action objects into API mutations, then invalidates all query caches on success
+- `moveExpiredAsync(source)` — Awaitable version of MOVE_EXPIRED for use in `TopBar`
 
 All components consume state via `useTasks()`. Do not bypass `dispatch`; go through it so logging and cache invalidation stay consistent.
+
+### Chat / AI flow (`client/src/components/chat-interface.tsx`)
+
+The chat bar at the bottom of Dashboard accepts typed or voice-dictated Spanish text:
+1. Text is sent to `POST /api/parse` with `existingTaskIds` for context.
+2. The server calls `gpt-4o-mini` with an inlined Argentine Spanish prompt and returns `{ actions, summary }`.
+3. The client loops over `actions` and calls `dispatch` for each (ADD_TASK, COMPLETE_TASK, DELETE_TASK, UPDATE_TASK, MOVE_EXPIRED).
+4. Voice input uses the browser's Web Speech API (`SpeechRecognition`). The `"/"` key globally focuses the chat input; `Escape` clears and blurs it.
 
 ### Backend
 
@@ -62,7 +82,7 @@ All components consume state via `useTasks()`. Do not bypass `dispatch`; go thro
 
 Key non-obvious endpoints:
 - `POST /api/tasks/move-expired` — Moves tasks with past dates (and `"a definir"` tasks) to today's date
-- `POST /api/parse` — Sends raw Spanish text to OpenAI `gpt-4o-mini` and returns structured `{ actions, summary }`. The AI prompt is inlined in `routes.ts:236`.
+- `POST /api/parse` — Sends raw Spanish text to OpenAI `gpt-4o-mini` and returns structured `{ actions, summary }`. The AI prompt is inlined in `routes.ts:248`. Rate-limited to 30 req/min.
 
 ### Dev server
 

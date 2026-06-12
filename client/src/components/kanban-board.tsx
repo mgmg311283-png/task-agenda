@@ -6,8 +6,9 @@ import { TaskCard } from './ui/task-card';
 import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
-import { X } from 'lucide-react';
+import { X, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 function parseDateToSortKey(dateStr: string): number {
     if (dateStr === 'a definir') return -1;
@@ -20,10 +21,12 @@ function parseDateToSortKey(dateStr: string): number {
     return year * 10000 + month * 100 + day;
 }
 
-function getSortedTasks(tasks: Task[], columnId: string, personFilter: string): Task[] {
+function getSortedTasks(tasks: Task[], columnId: string, personFilter: string, searchQuery: string = '', priorityFilter: string = ''): Task[] {
     const colTasks = tasks.filter(t => {
         if (t.status !== 'activa') return false;
         if (personFilter && t.person.toLowerCase() !== personFilter.toLowerCase()) return false;
+        if (searchQuery && !t.text.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+        if (priorityFilter && t.priority !== priorityFilter) return false;
         if (columnId === 'urgent') return t.urgent;
         if (columnId === 'action') return !t.urgent && (t.type === 'accion' || t.type === 'a_definir');
         if (columnId === 'think') return !t.urgent && t.type === 'para_pensar';
@@ -61,6 +64,8 @@ export function KanbanBoard() {
   const [activeId, setActiveId] = useState<number | null>(null);
   const [mobileTab, setMobileTab] = useState<string>('urgent');
   const [personFilter, setPersonFilter] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [priorityFilter, setPriorityFilter] = useState<string>('');
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -134,7 +139,7 @@ export function KanbanBoard() {
     : state.tasks;
 
   const columnCounts = COLUMNS.reduce((acc, col) => {
-    acc[col.id] = getSortedTasks(state.tasks, col.id, personFilter).length;
+    acc[col.id] = getSortedTasks(state.tasks, col.id, personFilter, searchQuery, priorityFilter).length;
     return acc;
   }, {} as Record<string, number>);
 
@@ -154,6 +159,46 @@ export function KanbanBoard() {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
+      {/* Search bar */}
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-background shrink-0">
+        <Search className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+        <Input
+          placeholder="Buscar tareas..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="h-8 rounded-none border-0 bg-transparent text-sm"
+        />
+        {searchQuery && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-5 w-5 flex-shrink-0"
+            onClick={() => setSearchQuery('')}
+          >
+            <X className="w-3 h-3" />
+          </Button>
+        )}
+        {/* Priority filter */}
+        <div className="flex items-center gap-1 ml-auto flex-shrink-0">
+          <span className="text-[10px] font-mono text-muted-foreground uppercase">Prioridad:</span>
+          {['alta', 'normal', 'baja'].map(p => (
+            <button
+              key={p}
+              onClick={() => setPriorityFilter(priorityFilter === p ? '' : p)}
+              className={cn(
+                "text-xs font-mono px-1.5 py-0.5 border rounded transition-colors",
+                priorityFilter === p
+                  ? "bg-foreground text-background border-foreground"
+                  : "bg-background text-muted-foreground border-border hover:border-foreground"
+              )}
+              title={`Filtrar por ${p}`}
+            >
+              {p[0].toUpperCase()}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Person filter bar */}
       {persons.length > 0 && (
         <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-background overflow-x-auto shrink-0">
@@ -223,7 +268,7 @@ export function KanbanBoard() {
             key={col.id}
             id={col.id}
             title={col.title}
-            tasks={getSortedTasks(state.tasks, col.id, personFilter)}
+            tasks={getSortedTasks(state.tasks, col.id, personFilter, searchQuery, priorityFilter)}
             color={col.color as any}
             isLoading={state.isLoading}
             onComplete={onComplete}
@@ -241,7 +286,7 @@ export function KanbanBoard() {
             key={col.id}
             id={col.id}
             title={col.title}
-            tasks={getSortedTasks(state.tasks, col.id, personFilter)}
+            tasks={getSortedTasks(state.tasks, col.id, personFilter, searchQuery, priorityFilter)}
             color={col.color as any}
             isLoading={state.isLoading}
             onComplete={onComplete}

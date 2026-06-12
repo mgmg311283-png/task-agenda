@@ -17,7 +17,13 @@
       "Bash(node -e \"const d=require\\('fs'\\).readFileSync\\('/dev/stdin','utf8'\\); const t=JSON.parse\\(d\\); console.log\\(t.length + ' tasks, first: ' + JSON.stringify\\(t[0]?.text\\)\\)\")",
       "Bash(curl -si -H \"Accept-Encoding: gzip\" http://localhost:5001/api/tasks)",
       "Bash(curl -si -H \"Accept-Encoding: gzip, deflate\" http://localhost:5001/)",
-      "Bash(curl -sv -H \"Accept-Encoding: gzip, deflate, br\" http://localhost:5001/)"
+      "Bash(curl -sv -H \"Accept-Encoding: gzip, deflate, br\" http://localhost:5001/)",
+      "Skill(update-config)",
+      "Bash(curl -s -X POST http://localhost:5001/api/tasks -H 'Content-Type: application/json' -d '{ *)",
+      "Bash(pkill *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
     ]
-  }
+  },
+  "model": "claude-haiku-4-5-20251001"
 }

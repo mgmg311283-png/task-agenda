@@ -1,5 +1,6 @@
 export type TaskType = 'accion' | 'para_pensar' | 'a_definir';
 export type TaskStatus = 'activa' | 'completada' | 'eliminada';
+export type TaskPriority = 'baja' | 'normal' | 'alta';
 
 export interface Task {
   id: number;
@@ -9,6 +10,9 @@ export interface Task {
   type: TaskType;
   urgent: boolean;
   status: TaskStatus;
+  priority?: TaskPriority;
+  tags?: string[];
+  dueTime?: string; // "HH:mm" format
   createdAt: string;
   updatedAt: string;
 }
