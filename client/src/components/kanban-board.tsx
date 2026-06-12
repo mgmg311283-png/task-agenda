@@ -6,7 +6,7 @@ import { TaskCard } from './ui/task-card';
 import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
-import { X, Search } from 'lucide-react';
+import { X, Search, Eye, EyeOff, Grid3X3, List } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -66,6 +66,8 @@ export function KanbanBoard() {
   const [personFilter, setPersonFilter] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [priorityFilter, setPriorityFilter] = useState<string>('');
+  const [showCompleted, setShowCompleted] = useState<boolean>(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -183,6 +185,29 @@ export function KanbanBoard() {
         <div className="hidden md:flex items-center gap-2 ml-2 pl-2 border-l border-border text-[10px] font-mono text-muted-foreground flex-shrink-0">
           <span title="Tareas activas">{state.tasks.length} activas</span>
           <span title="Completadas hoy">✓ {state.allTasks.filter(t => t.status === 'completada').length}</span>
+        </div>
+
+        {/* View mode toggle */}
+        <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+            title={`Cambiar a ${viewMode === 'grid' ? 'lista' : 'grid'}`}
+          >
+            {viewMode === 'grid' ? <List className="w-3 h-3" /> : <Grid3X3 className="w-3 h-3" />}
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            onClick={() => setShowCompleted(!showCompleted)}
+            title={showCompleted ? 'Ocultar completadas' : 'Mostrar completadas'}
+          >
+            {showCompleted ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+          </Button>
         </div>
 
         {/* Priority filter */}
