@@ -25,7 +25,13 @@
       "Bash(git commit -m ' *)",
       "Bash(PORT=5000 NODE_ENV=production node dist/index.cjs)",
       "Bash(curl -s http://localhost:5000/api/tasks)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(curl -s -X POST http://localhost:5000/api/tasks -H 'Content-Type: application/json' -d '{\"text\":\"Test Task\",\"type\":\"accion\"}')",
+      "Bash(curl -s http://localhost:5000/api/logs)",
+      "Bash(curl -s http://localhost:5000/api/metrics)",
+      "Bash(curl -s http://localhost:5000/metrics)",
+      "Bash(curl -s -X POST http://localhost:5000/api/tasks -H 'Content-Type: application/json' -d '{\"text\":\"Verification Task ✓\",\"type\":\"accion\"}')",
+      "Bash(curl -s http://localhost:5000/)"
     ]
   },
   "model": "claude-haiku-4-5-20251001"
