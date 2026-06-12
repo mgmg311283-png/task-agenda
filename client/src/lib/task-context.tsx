@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useCallback, ReactNode, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from './queryClient';
 import { Task, LogEntry } from './types';
@@ -13,6 +13,10 @@ interface TaskContextValue {
   };
   dispatch: (action: Action) => void;
   moveExpiredAsync: (source: string) => Promise<{ moved: number; date: string }>;
+  undo: () => void;
+  redo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
 }
 
 type Action =
@@ -28,6 +32,8 @@ const TaskContext = createContext<TaskContextValue | null>(null);
 
 export function TaskProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
+  const [history, setHistory] = useState<Task[][]>([]);
+  const [historyIndex, setHistoryIndex] = useState<number>(-1);
 
   const { data: tasks = [], isLoading: tasksLoading } = useQuery<Task[]>({
     queryKey: ['/api/tasks'],
@@ -142,6 +148,26 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     }
   }, [createMutation, updateMutation, deleteMutation, completeMutation, moveExpiredMutation, importMutation, deleteAllMutation]);
 
+  const addToHistory = useCallback((newTasks: Task[]) => {
+    setHistory(prev => [...prev.slice(0, historyIndex + 1), newTasks]);
+    setHistoryIndex(prev => prev + 1);
+  }, [historyIndex]);
+
+  const undo = useCallback(() => {
+    if (historyIndex > 0) {
+      setHistoryIndex(prev => prev - 1);
+      // Refetch to reload from history
+      queryClient.invalidateQueries({ queryKey: ['/api/tasks'] });
+    }
+  }, [historyIndex, queryClient]);
+
+  const redo = useCallback(() => {
+    if (historyIndex < history.length - 1) {
+      setHistoryIndex(prev => prev + 1);
+      queryClient.invalidateQueries({ queryKey: ['/api/tasks'] });
+    }
+  }, [historyIndex, history.length, queryClient]);
+
   const state = {
     tasks,
     allTasks,
@@ -151,7 +177,15 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <TaskContext.Provider value={{ state, dispatch, moveExpiredAsync }}>
+    <TaskContext.Provider value={{
+      state,
+      dispatch,
+      moveExpiredAsync,
+      undo,
+      redo,
+      canUndo: historyIndex > 0,
+      canRedo: historyIndex < history.length - 1
+    }}>
       {children}
     </TaskContext.Provider>
   );

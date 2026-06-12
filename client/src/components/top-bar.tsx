@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Download, Upload, Trash, CalendarClock, History, BarChart3, Moon, Sun, AlertTriangle } from "lucide-react";
+import { Download, Upload, Trash, CalendarClock, History, BarChart3, Moon, Sun, AlertTriangle, RotateCcw, RotateCw } from "lucide-react";
 import { useTasks } from "@/lib/task-context";
 import { Link, useLocation } from "wouter";
 import Papa from 'papaparse';
@@ -21,7 +21,7 @@ import { useState, useMemo } from "react";
 import { format } from "date-fns";
 
 export function TopBar() {
-  const { state, dispatch, moveExpiredAsync } = useTasks();
+  const { state, dispatch, moveExpiredAsync, undo, redo, canUndo, canRedo } = useTasks();
   const [csvContent, setCsvContent] = useState("");
   const [isImportOpen, setIsImportOpen] = useState(false);
   const { theme, setTheme } = useTheme();
@@ -206,6 +206,30 @@ export function TopBar() {
               <CalendarClock className="w-3 h-3" /> Vencidas a Hoy
             </Button>
           )}
+
+          <div className="h-4 w-px bg-border mx-1 hidden sm:block" />
+
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={undo}
+            disabled={!canUndo}
+            title="Deshacer (Ctrl+Z)"
+          >
+            <RotateCcw className="w-4 h-4" />
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={redo}
+            disabled={!canRedo}
+            title="Rehacer (Ctrl+Y)"
+          >
+            <RotateCw className="w-4 h-4" />
+          </Button>
 
           <div className="h-4 w-px bg-border mx-1 hidden sm:block" />
 

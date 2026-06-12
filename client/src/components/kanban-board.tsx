@@ -159,7 +159,7 @@ export function KanbanBoard() {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      {/* Search bar */}
+      {/* Search bar with stats */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-background shrink-0">
         <Search className="h-4 w-4 text-muted-foreground flex-shrink-0" />
         <Input
@@ -178,6 +178,13 @@ export function KanbanBoard() {
             <X className="w-3 h-3" />
           </Button>
         )}
+
+        {/* Quick stats */}
+        <div className="hidden md:flex items-center gap-2 ml-2 pl-2 border-l border-border text-[10px] font-mono text-muted-foreground flex-shrink-0">
+          <span title="Tareas activas">{state.tasks.length} activas</span>
+          <span title="Completadas hoy">✓ {state.allTasks.filter(t => t.status === 'completada').length}</span>
+        </div>
+
         {/* Priority filter */}
         <div className="flex items-center gap-1 ml-auto flex-shrink-0">
           <span className="text-[10px] font-mono text-muted-foreground uppercase">Prioridad:</span>

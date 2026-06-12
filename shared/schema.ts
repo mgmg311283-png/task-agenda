@@ -35,13 +35,20 @@ export const insertTaskSchema = createInsertSchema(tasks).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  text: z.string().min(1, "El texto de la tarea es requerido").max(500, "Máximo 500 caracteres"),
+  date: z.string().optional().default("a definir"),
+  person: z.string().optional().default("a definir"),
+  priority: z.enum(['baja', 'normal', 'alta']).optional(),
 });
 
 export const updateTaskSchema = createInsertSchema(tasks).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
-}).partial();
+}).partial().extend({
+  text: z.string().min(1).max(500).optional(),
+});
 
 export const insertLogSchema = createInsertSchema(logs).omit({
   id: true,

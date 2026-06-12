@@ -99,7 +99,7 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate, onDuplicate }: 
 
   const style = {
     transform: CSS.Transform.toString(transform),
-    transition,
+    transition: transition || 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
     opacity: isDragging ? 0.5 : 1,
   };
 
@@ -117,12 +117,12 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate, onDuplicate }: 
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="touch-manipulation mb-3">
+    <div ref={setNodeRef} style={style} className="touch-manipulation mb-3 animate-in fade-in duration-200">
       <Card
         className={cn(
-          "rounded-none border-t-0 border-x-0 border-b shadow-none hover:bg-muted/30 transition-colors group",
+          "rounded-none border-t-0 border-x-0 border-b shadow-none hover:bg-muted/30 transition-all group",
           overdue && "border-l-2 border-l-orange-400",
-          isTaskToday && "border-l-2 border-l-green-500 bg-green-50/30 dark:bg-green-950/20"
+          isTaskToday && "border-l-2 border-l-green-500 bg-green-50/30 dark:bg-green-950/20 hover:shadow-md"
         )}
         data-testid={`card-task-${task.id}`}
       >
@@ -235,11 +235,12 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate, onDuplicate }: 
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6 rounded-none hover:bg-green-100 hover:text-green-700"
+                className="h-6 w-6 rounded-none hover:bg-green-100 hover:text-green-700 dark:hover:bg-green-900 dark:hover:text-green-300 transition-colors"
                 onClick={(e) => { e.stopPropagation(); onComplete(task.id); }}
                 onPointerDown={(e) => e.stopPropagation()}
                 data-testid={`btn-complete-${task.id}`}
-                title="Completar"
+                title={`Completar: ${task.text}`}
+                aria-label={`Completar tarea #${task.id}: ${task.text}`}
               >
                 <Check className="h-3 w-3" />
               </Button>
