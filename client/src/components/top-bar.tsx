@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Download, Upload, Trash, CalendarClock, History, BarChart3, Moon, Sun, AlertTriangle, RotateCcw, RotateCw, Plus, Settings, Zap, Wifi } from "lucide-react";
+import { Download, Upload, Trash, CalendarClock, History, BarChart3, Moon, Sun, AlertTriangle, RotateCcw, RotateCw, Plus, Settings, Zap, Wifi, Presentation, Focus } from "lucide-react";
 import { useTasks } from "@/lib/task-context";
 import { Link, useLocation } from "wouter";
 import Papa from 'papaparse';
@@ -7,6 +7,7 @@ import { toast } from "@/hooks/use-toast";
 import { Task, TaskStatus } from "@/lib/types";
 import { isTaskOverdue } from "@/lib/parser";
 import { useTheme } from "next-themes";
+import { cn } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -27,6 +28,8 @@ export function TopBar() {
   const { theme, setTheme } = useTheme();
   const [location] = useLocation();
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'offline'>('synced');
+  const [focusMode, setFocusMode] = useState(false);
+  const [presentationMode, setPresentationMode] = useState(false);
 
   // Simulate sync status
   React.useEffect(() => {
@@ -306,6 +309,26 @@ export function TopBar() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn("h-8 w-8", focusMode && "bg-primary/20 text-primary")}
+            title="Modo Focus (ocultar distracciones)"
+            onClick={() => setFocusMode(!focusMode)}
+          >
+            <Focus className="w-4 h-4" />
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn("h-8 w-8", presentationMode && "bg-primary/20 text-primary")}
+            title="Modo Presentación"
+            onClick={() => setPresentationMode(!presentationMode)}
+          >
+            <Presentation className="w-4 h-4" />
+          </Button>
 
           <Button
             variant="ghost"

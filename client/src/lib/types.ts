@@ -1,6 +1,13 @@
 export type TaskType = 'accion' | 'para_pensar' | 'a_definir';
 export type TaskStatus = 'activa' | 'completada' | 'eliminada';
 export type TaskPriority = 'baja' | 'normal' | 'alta';
+export type Language = 'es' | 'en' | 'pt';
+
+export const LANGUAGES = {
+  es: { name: 'Español', flag: '🇦🇷' },
+  en: { name: 'English', flag: '🇺🇸' },
+  pt: { name: 'Português', flag: '🇧🇷' }
+};
 
 export interface Task {
   id: number;
