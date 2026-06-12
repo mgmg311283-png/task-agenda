@@ -1,3 +1,4 @@
+import React, { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Download, Upload, Trash, CalendarClock, History, BarChart3, Moon, Sun, AlertTriangle, RotateCcw, RotateCw, Plus, Settings, Zap, Wifi, Presentation, Focus } from "lucide-react";
 import { useTasks } from "@/lib/task-context";
@@ -18,7 +19,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { useState, useMemo } from "react";
 import { format } from "date-fns";
 
 export function TopBar() {

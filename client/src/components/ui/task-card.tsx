@@ -143,10 +143,10 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate, onDuplicate }: 
             <span className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground flex-1 min-w-0">
               #{task.id}
               {task.priority === 'alta' && (
-                <TrendingUp className="h-3.5 w-3.5 text-red-500 flex-shrink-0" title="Alta prioridad" />
+                <TrendingUp className="h-3.5 w-3.5 text-red-500 flex-shrink-0" aria-label="Alta prioridad" />
               )}
               {task.priority === 'baja' && (
-                <TrendingUp className="h-3.5 w-3.5 text-blue-500 rotate-180 flex-shrink-0" title="Baja prioridad" />
+                <TrendingUp className="h-3.5 w-3.5 text-blue-500 rotate-180 flex-shrink-0" aria-label="Baja prioridad" />
               )}
               {task.urgent && (
                 <Badge
