@@ -20,6 +20,8 @@ export interface Task {
   priority?: TaskPriority;
   tags?: string[];
   dueTime?: string; // "HH:mm" format
+  starred?: boolean;
+  estimatedHours?: number;
   createdAt: string;
   updatedAt: string;
 }

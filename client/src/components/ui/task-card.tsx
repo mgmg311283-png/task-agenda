@@ -3,7 +3,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Check, Trash2, ArrowRightLeft, Pencil, CalendarIcon, ChevronRight, GripVertical, Copy, Zap, AlertCircle, TrendingUp } from "lucide-react";
+import { Check, Trash2, ArrowRightLeft, Pencil, CalendarIcon, ChevronRight, GripVertical, Copy, Zap, AlertCircle, TrendingUp, Star } from "lucide-react";
 import { Task } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useState } from 'react';
@@ -163,6 +163,26 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate, onDuplicate }: 
 
             {/* Action buttons */}
             <div className="flex gap-1 flex-shrink-0">
+
+              {/* Star/favorite */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  "h-6 w-6 rounded-none",
+                  task.starred
+                    ? "text-yellow-500 bg-yellow-50 hover:bg-yellow-100 dark:bg-yellow-900"
+                    : "hover:bg-yellow-50 hover:text-yellow-500 opacity-0 group-hover:opacity-100"
+                )}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onUpdate(task.id, { starred: !task.starred });
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                title={task.starred ? "Desmarcar favorita" : "Marcar favorita"}
+              >
+                <Star className={cn("h-3 w-3", task.starred && "fill-current")} />
+              </Button>
 
               {/* Toggle urgente */}
               <Button

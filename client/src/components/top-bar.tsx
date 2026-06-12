@@ -130,6 +130,15 @@ export function TopBar() {
     ? Math.round((completedToday / (totalActive + completedToday)) * 100)
     : 0;
 
+  // Activity indicators
+  const recentlyModified = useMemo(() => {
+    const now = new Date();
+    const fiveMinutesAgo = new Date(now.getTime() - 5 * 60000);
+    return state.tasks.filter(t =>
+      new Date(t.updatedAt) > fiveMinutesAgo && t.status === 'activa'
+    ).length;
+  }, [state.tasks]);
+
   const navLinks = [
     { href: '/', label: 'TABLERO' },
     { href: '/log', label: 'HISTORIAL', icon: <History className="w-3 h-3" /> },
@@ -155,6 +164,11 @@ export function TopBar() {
             {completedToday > 0 && (
               <span className="text-[10px] font-mono bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 px-1.5 py-0.5 rounded-full">
                 +{completedToday} hoy
+              </span>
+            )}
+            {recentlyModified > 0 && (
+              <span className="text-[10px] font-mono bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded-full animate-pulse">
+                🔄 {recentlyModified}
               </span>
             )}
           </div>
