@@ -11,6 +11,8 @@ export const tasks = pgTable("tasks", {
   type: text("type").notNull().default("a_definir"), // accion | para_pensar | a_definir
   urgent: boolean("urgent").notNull().default(false),
   status: text("status").notNull().default("activa"), // activa | completada | eliminada
+  starred: boolean("starred").notNull().default(false),
+  priority: text("priority").default("normal"), // baja | normal | alta
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (t) => [
@@ -39,7 +41,8 @@ export const insertTaskSchema = createInsertSchema(tasks).omit({
   text: z.string().min(1, "El texto de la tarea es requerido").max(500, "Máximo 500 caracteres"),
   date: z.string().optional().default("a definir"),
   person: z.string().optional().default("a definir"),
-  priority: z.enum(['baja', 'normal', 'alta']).optional(),
+  priority: z.enum(['baja', 'normal', 'alta']).optional().default('normal'),
+  starred: z.boolean().optional().default(false),
 });
 
 export const updateTaskSchema = createInsertSchema(tasks).omit({
@@ -48,6 +51,8 @@ export const updateTaskSchema = createInsertSchema(tasks).omit({
   updatedAt: true,
 }).partial().extend({
   text: z.string().min(1).max(500).optional(),
+  priority: z.enum(['baja', 'normal', 'alta']).optional(),
+  starred: z.boolean().optional(),
 });
 
 export const insertLogSchema = createInsertSchema(logs).omit({

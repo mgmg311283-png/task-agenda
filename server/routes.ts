@@ -198,6 +198,8 @@ export async function registerRoutes(
         person: t.person || "a definir",
         type: t.type || "a_definir",
         urgent: t.urgent || false,
+        starred: t.starred || false,
+        priority: t.priority || "normal",
         status: "activa",
       }));
 
