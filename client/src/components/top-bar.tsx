@@ -69,7 +69,7 @@ export function TopBar() {
 
   const handlePasteImport = () => {
     if (!csvContent.trim()) return;
-    Papa.parse(csvContent, {
+    const csvWithHeaders = csvContent.trim().toUpperCase().startsWith("FECHA") ? csvContent : "FECHA,TAREA,PERSONA,TIPO,URGENTE\n" + csvContent; Papa.parse(csvWithHeaders, {
         header: true,
         skipEmptyLines: true,
         complete: (results) => {
