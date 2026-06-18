@@ -35,8 +35,8 @@ There are no automated tests in this project.
 ### Data model (`shared/schema.ts`)
 
 Two tables:
-- **tasks** — `id`, `text`, `date` (`"dd/MM/yy"` or `"a definir"`), `person`, `type` (`accion | para_pensar | a_definir`), `urgent` (boolean), `status` (`activa | completada | eliminada`). Deletions and completions are soft — they update `status`.
-- **logs** — Full audit trail. Every mutation writes a log entry with `source` (`UI | Chat | Audio | Import`), `originalValues`, and `newValues` as JSON strings.
+- **tasks** — `id`, `text`, `date` (`"dd/MM/yy"` or `"a definir"`), `person`, `type` (`accion | para_pensar | a_definir`), `urgent` (boolean), `status` (`activa | completada | eliminada`), `starred` (boolean), `priority` (`baja | normal | alta`), `createdAt`, `updatedAt`. Deletions and completions are soft — they update `status`.
+- **logs** — Full audit trail. Every mutation writes a log entry with `source` (`UI | Chat | Audio | Import`), `action`, `details`, `originalValues`, and `newValues` as JSON strings.
 
 ### Routing
 
@@ -76,12 +76,35 @@ The chat bar at the bottom of Dashboard accepts typed or voice-dictated Spanish 
 3. The client loops over `actions` and calls `dispatch` for each (ADD_TASK, COMPLETE_TASK, DELETE_TASK, UPDATE_TASK, MOVE_EXPIRED).
 4. Voice input uses the browser's Web Speech API (`SpeechRecognition`). The `"/"` key globally focuses the chat input; `Escape` clears and blurs it.
 
+### Client utility modules
+
+- **`lib/i18n.ts`** — Internationalization. Exports `translations` object with Spanish and English strings (used throughout the UI).
+- **`lib/achievements.ts`** — Achievement/gamification system. Defines `ACHIEVEMENTS` array with milestones (first task, five completed, streaks, etc.).
+- **`lib/analytics.ts`** — Analytics tracker. `AnalyticsTracker` class for tracking user actions and events (last 100 events in memory).
+- **`lib/notifications.ts`** — Notification/toast system.
+- **`lib/parser.ts`** — Client-side task parsing utilities (complementary to `POST /api/parse`).
+- **`lib/queryClient.ts`** — TanStack React Query client configuration.
+- **`lib/settings.ts`** — Settings storage and management (localStorage-backed).
+- **`lib/task-templates.ts`** — Predefined task templates for quick creation (e.g., "Reunión", "Seguimiento").
+- **`lib/types.ts`** — Shared TypeScript type definitions.
+
 ### Backend
 
 `server/routes.ts` registers all routes on the Express app. The storage layer (`server/storage.ts`) is the `DatabaseStorage` class implementing `IStorage` — all DB access goes through it, never raw SQL in routes.
 
 Key non-obvious endpoints:
+- `GET /api/tasks` — Fetch all active (non-deleted, non-completed) tasks
+- `GET /api/tasks/all` — Fetch all tasks including completed and deleted (for metrics)
+- `GET /api/tasks/next-id` — Get the next available task ID
+- `POST /api/tasks` — Create a task
+- `PATCH /api/tasks/:id` — Update a task
+- `POST /api/tasks/:id/complete` — Complete a task (soft mark)
+- `POST /api/tasks/:id/delete` — Delete a task (soft delete)
 - `POST /api/tasks/move-expired` — Moves tasks with past dates (and `"a definir"` tasks) to today's date
+- `POST /api/tasks/delete-all` — Soft-delete all active tasks
+- `POST /api/tasks/import` — Bulk import tasks (expects `{ tasks: Task[] }`)
+- `GET /api/logs` — Fetch audit logs (limit via `?limit=200`)
+- `GET /api/health` — Health check endpoint
 - `POST /api/parse` — Sends raw Spanish text to OpenAI `gpt-4o-mini` and returns structured `{ actions, summary }`. The AI prompt is inlined in `routes.ts:248`. Rate-limited to 30 req/min.
 
 ### Dev server
@@ -95,3 +118,11 @@ In development, Vite runs as Express middleware (`server/vite.ts`), so a single 
 | `DATABASE_URL` | PostgreSQL connection string (required) |
 | `OPENAI_API_KEY` | Required for the `/api/parse` AI endpoint |
 | `NODE_ENV` | `development` enables Vite middleware; `production` serves static files |
+| `PORT` | Server port (defaults to 5000) |
+
+### Build & Tooling
+
+- **`script/build.ts`** — Custom esbuild script that transpiles the Express server to `dist/index.cjs` and bundles Vite client to `dist/public/`. Runs on `npm run build`.
+- **`vite-plugin-meta-images.ts`** — Custom Vite plugin for handling meta/OG image metadata.
+- **Database** — PostgreSQL with Drizzle ORM. Migrations via `drizzle-kit` (config in `drizzle.config.ts`).
+- **Static serving** — In production, `server/static.ts` serves pre-built assets from `dist/public/`. In dev, Vite middleware handles HMR.
