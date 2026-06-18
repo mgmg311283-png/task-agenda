@@ -368,6 +368,7 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate, onDuplicate }: 
                   className={cn(
                     "font-mono tracking-tight text-xs flex items-center gap-1 cursor-pointer hover:text-foreground transition-colors group/date",
                     task.date === 'a definir' ? "text-muted-foreground italic" :
+                    isTaskToday ? "text-green-600 font-semibold" :
                     overdue ? "text-orange-500 font-semibold" : "text-muted-foreground"
                   )}
                   onClick={(e) => e.stopPropagation()}
