@@ -54,6 +54,14 @@ function advanceOneDay(dateStr: string): string {
   return formatDate(next);
 }
 
+function advanceSevenDays(dateStr: string): string {
+  const base = parseDateStr(dateStr);
+  const from = base || new Date();
+  const next = new Date(from);
+  next.setDate(next.getDate() + 7);
+  return formatDate(next);
+}
+
 function getColumnForTask(task: Task): string {
   if (task.urgent) return 'urgent';
   if (task.type === 'para_pensar') return 'think';
@@ -414,6 +422,21 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate, onDuplicate }: 
             >
               <ChevronRight className="w-3 h-3" />
               <span>1d</span>
+            </button>
+
+            {/* +7 days */}
+            <button
+              className="font-mono text-xs text-muted-foreground hover:text-foreground hover:bg-muted px-1 rounded-none transition-colors flex items-center gap-0.5"
+              onClick={(e) => {
+                e.stopPropagation();
+                onUpdate(task.id, { date: advanceSevenDays(task.date) });
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              title="Mover 7 días adelante"
+              data-testid={`btn-plus7d-${task.id}`}
+            >
+              <ChevronRight className="w-3 h-3" />
+              <span>7d</span>
             </button>
 
           </div>
