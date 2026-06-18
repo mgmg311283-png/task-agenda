@@ -6,7 +6,7 @@ import { TaskCard } from './ui/task-card';
 import { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
-import { X, Search, Eye, EyeOff, Grid3X3, List } from 'lucide-react';
+import { X, Search, Eye, EyeOff, Grid3X3, List, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -21,12 +21,13 @@ function parseDateToSortKey(dateStr: string): number {
     return year * 10000 + month * 100 + day;
 }
 
-function getSortedTasks(tasks: Task[], columnId: string, personFilter: string, searchQuery: string = '', priorityFilter: string = ''): Task[] {
+function getSortedTasks(tasks: Task[], columnId: string, personFilter: string, searchQuery: string = '', priorityFilter: string = '', starredFilter: boolean = false): Task[] {
     const colTasks = tasks.filter(t => {
         if (t.status !== 'activa') return false;
         if (personFilter && t.person.toLowerCase() !== personFilter.toLowerCase()) return false;
         if (searchQuery && !t.text.toLowerCase().includes(searchQuery.toLowerCase())) return false;
         if (priorityFilter && t.priority !== priorityFilter) return false;
+        if (starredFilter && !t.starred) return false;
         if (columnId === 'urgent') return t.urgent;
         if (columnId === 'action') return !t.urgent && (t.type === 'accion' || t.type === 'a_definir');
         if (columnId === 'think') return !t.urgent && t.type === 'para_pensar';
@@ -66,6 +67,7 @@ export function KanbanBoard() {
   const [personFilter, setPersonFilter] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [priorityFilter, setPriorityFilter] = useState<string>('');
+  const [starredFilter, setStarredFilter] = useState<boolean>(false);
   const [showCompleted, setShowCompleted] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
@@ -155,7 +157,7 @@ export function KanbanBoard() {
     : state.tasks;
 
   const columnCounts = COLUMNS.reduce((acc, col) => {
-    acc[col.id] = getSortedTasks(state.tasks, col.id, personFilter, searchQuery, priorityFilter).length;
+    acc[col.id] = getSortedTasks(state.tasks, col.id, personFilter, searchQuery, priorityFilter, starredFilter).length;
     return acc;
   }, {} as Record<string, number>);
 
@@ -224,8 +226,24 @@ export function KanbanBoard() {
           </Button>
         </div>
 
-        {/* Priority filter */}
-        <div className="flex items-center gap-1 ml-auto flex-shrink-0">
+        {/* Priority and starred filters */}
+        <div className="flex items-center gap-2 ml-auto flex-shrink-0">
+          {/* Starred filter */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn(
+              "h-6 w-6 rounded-none flex-shrink-0",
+              starredFilter
+                ? "text-yellow-500 bg-yellow-50 hover:bg-yellow-100 dark:bg-yellow-900 dark:hover:bg-yellow-800"
+                : "text-muted-foreground hover:text-yellow-500 hover:bg-yellow-50/50"
+            )}
+            onClick={() => setStarredFilter(!starredFilter)}
+            title={starredFilter ? "Mostrar todas" : "Mostrar solo favoritas"}
+          >
+            <Star className={cn("h-3.5 w-3.5", starredFilter && "fill-current")} />
+          </Button>
+
           <span className="text-[10px] font-mono text-muted-foreground uppercase">Prioridad:</span>
           {['alta', 'normal', 'baja'].map(p => (
             <button
@@ -314,7 +332,7 @@ export function KanbanBoard() {
             key={col.id}
             id={col.id}
             title={col.title}
-            tasks={getSortedTasks(state.tasks, col.id, personFilter, searchQuery, priorityFilter)}
+            tasks={getSortedTasks(state.tasks, col.id, personFilter, searchQuery, priorityFilter, starredFilter)}
             color={col.color as any}
             isLoading={state.isLoading}
             onComplete={onComplete}
@@ -332,7 +350,7 @@ export function KanbanBoard() {
             key={col.id}
             id={col.id}
             title={col.title}
-            tasks={getSortedTasks(state.tasks, col.id, personFilter, searchQuery, priorityFilter)}
+            tasks={getSortedTasks(state.tasks, col.id, personFilter, searchQuery, priorityFilter, starredFilter)}
             color={col.color as any}
             isLoading={state.isLoading}
             onComplete={onComplete}

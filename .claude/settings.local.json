@@ -35,7 +35,9 @@
       "Bash(curl -I http://localhost:5000/)",
       "Bash(curl -s -X POST http://localhost:5000/api/tasks -H 'Content-Type: application/json' -d '{\"text\":\"Production Test ✓\",\"type\":\"accion\"}')",
       "Bash(curl -s -I http://localhost:5000/assets/)",
-      "Bash(curl -s http://localhost:5000/manifest.json)"
+      "Bash(curl -s http://localhost:5000/manifest.json)",
+      "Skill(run)",
+      "Skill(run:*)"
     ]
   },
   "model": "claude-haiku-4-5-20251001"
