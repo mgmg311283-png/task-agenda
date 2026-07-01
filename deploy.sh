@@ -39,7 +39,7 @@ npm install -g pm2 2>/dev/null || echo "PM2 ya instalado"
 pm2 delete task-agenda 2>/dev/null || echo "Primera vez"
 
 # 7. Iniciar app
-pm2 start dist/index.cjs --name task-agenda --port 5000
+PORT=5000 pm2 start dist/index.cjs --name task-agenda
 pm2 save
 pm2 startup
 
