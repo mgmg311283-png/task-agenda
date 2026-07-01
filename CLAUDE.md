@@ -107,7 +107,7 @@ Key non-obvious endpoints:
 - `POST /api/tasks/import` — Bulk import tasks (expects `{ tasks: Task[] }`)
 - `GET /api/logs` — Fetch audit logs (limit via `?limit=200`)
 - `GET /api/health` — Health check endpoint
-- `POST /api/parse` — Sends raw Spanish text to Groq API (free tier, `mixtral-8x7b-32768`) and returns structured `{ actions, summary }`. The AI prompt is inlined in `routes.ts:248`. Rate-limited to 30 req/min. Groq offers 30 requests/minute free tier, perfect for single-user apps.
+- `POST /api/parse` — Sends raw Spanish text to Groq API (free tier, `llama-3.1-70b-versatile`) and returns structured `{ actions, summary }`. The AI prompt is inlined in `routes.ts:248`. Rate-limited to 30 req/min. Groq offers 30 requests/minute free tier, perfect for single-user apps.
 
 ### Dev server
 

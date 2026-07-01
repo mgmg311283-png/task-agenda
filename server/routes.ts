@@ -243,7 +243,7 @@ export async function registerRoutes(
       const today = format(new Date(), "dd/MM/yy");
 
       const response = await groq.chat.completions.create({
-        model: "mixtral-8x7b-32768",
+        model: "llama-3.1-70b-versatile",
         response_format: { type: "json_object" },
         messages: [
           {
