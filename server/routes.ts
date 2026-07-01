@@ -3,11 +3,11 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertTaskSchema, updateTaskSchema } from "@shared/schema";
 import { parse, isValid, isBefore, startOfDay, format } from "date-fns";
-import OpenAI from "openai";
+import Groq from "groq-sdk";
 import rateLimit from "express-rate-limit";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+const groq = new Groq({
+  apiKey: process.env.GROQ_API_KEY,
 });
 
 const parseRateLimit = rateLimit({
@@ -242,8 +242,8 @@ export async function registerRoutes(
 
       const today = format(new Date(), "dd/MM/yy");
 
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
+      const response = await groq.chat.completions.create({
+        model: "mixtral-8x7b-32768",
         response_format: { type: "json_object" },
         messages: [
           {

@@ -16,7 +16,7 @@ There are no automated tests in this project.
 
 ## Deployment
 
-Deployed to **Railway** and **Replit**. Environment variables (`DATABASE_URL`, `OPENAI_API_KEY`) are managed per platform.
+Deployed to **Railway** and **Replit**. Environment variables (`DATABASE_URL`, `GROQ_API_KEY`) are managed per platform.
 
 The `start` script automatically runs `drizzle-kit push` before launching, ensuring schema migrations are applied on deploy.
 
@@ -78,7 +78,7 @@ All components consume state via `useTasks()`. Do not bypass `dispatch`; go thro
 
 The chat bar at the bottom of Dashboard accepts typed or voice-dictated Spanish text:
 1. Text is sent to `POST /api/parse` with `existingTaskIds` for context.
-2. The server calls `gpt-4o-mini` with an inlined Argentine Spanish prompt and returns `{ actions, summary }`.
+2. The server calls Groq API (`mixtral-8x7b-32768`) with an inlined Argentine Spanish prompt and returns `{ actions, summary }`.
 3. The client loops over `actions` and calls `dispatch` for each (ADD_TASK, COMPLETE_TASK, DELETE_TASK, UPDATE_TASK, MOVE_EXPIRED).
 4. Voice input uses the browser's Web Speech API (`SpeechRecognition`). The `"/"` key globally focuses the chat input; `Escape` clears and blurs it.
 
@@ -107,7 +107,7 @@ Key non-obvious endpoints:
 - `POST /api/tasks/import` — Bulk import tasks (expects `{ tasks: Task[] }`)
 - `GET /api/logs` — Fetch audit logs (limit via `?limit=200`)
 - `GET /api/health` — Health check endpoint
-- `POST /api/parse` — Sends raw Spanish text to OpenAI `gpt-4o-mini` and returns structured `{ actions, summary }`. The AI prompt is inlined in `routes.ts:248`. Rate-limited to 30 req/min.
+- `POST /api/parse` — Sends raw Spanish text to Groq API (free tier, `mixtral-8x7b-32768`) and returns structured `{ actions, summary }`. The AI prompt is inlined in `routes.ts:248`. Rate-limited to 30 req/min. Groq offers 30 requests/minute free tier, perfect for single-user apps.
 
 ### Dev server
 
@@ -120,7 +120,7 @@ The server imports `dotenv/config` at startup, which auto-loads variables from a
 | Variable | Purpose |
 |---|---|
 | `DATABASE_URL` | PostgreSQL connection string (required) |
-| `OPENAI_API_KEY` | Required for the `/api/parse` AI endpoint |
+| `GROQ_API_KEY` | Required for the `/api/parse` AI endpoint (free from https://console.groq.com) |
 | `NODE_ENV` | `development` enables Vite middleware; `production` serves static files |
 
-In development, create a `.env` file with your secrets. In production (Railway/Replit), set these via platform env var settings — they won't be committed to git.
+In development, create a `.env` file with your secrets (copy `.env.example` as a template). In production (Railway/Replit), set these via platform env var settings — they won't be committed to git.
