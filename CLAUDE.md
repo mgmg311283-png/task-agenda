@@ -16,7 +16,7 @@ There are no automated tests in this project.
 
 ## Deployment
 
-Deployed to **Railway** and **Replit**. Environment variables (`DATABASE_URL`, `OPENAI_API_KEY`) are managed per platform.
+Deployed to **Digital Ocean** (via Replit Cloud Run). Environment variables (`DATABASE_URL`, `OPENAI_API_KEY`) are managed via Replit Secrets.
 
 The `start` script automatically runs `drizzle-kit push` before launching, ensuring schema migrations are applied on deploy.
 
@@ -123,4 +123,4 @@ The server imports `dotenv/config` at startup, which auto-loads variables from a
 | `OPENAI_API_KEY` | Required for the `/api/parse` AI endpoint |
 | `NODE_ENV` | `development` enables Vite middleware; `production` serves static files |
 
-In development, create a `.env` file with your secrets. In production (Railway/Replit), set these via platform env var settings — they won't be committed to git.
+In development, create a `.env` file with your secrets. In production (Digital Ocean via Replit), set these via Replit Secrets — they won't be committed to git.
