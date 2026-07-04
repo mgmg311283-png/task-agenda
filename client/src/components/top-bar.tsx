@@ -22,7 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { format } from "date-fns";
 
 export function TopBar() {
-  const { state, dispatch, moveExpiredAsync, undo, redo, canUndo, canRedo } = useTasks();
+  const { state, dispatch, moveExpiredAsync, moveUrgentToActionAsync, undo, redo, canUndo, canRedo } = useTasks();
   const [csvContent, setCsvContent] = useState("");
   const [isImportOpen, setIsImportOpen] = useState(false);
   const { theme, setTheme } = useTheme();
@@ -109,6 +109,11 @@ export function TopBar() {
 
   const overdueCount = useMemo(
     () => state.tasks.filter(t => t.status === 'activa' && isTaskOverdue(t.date)).length,
+    [state.tasks]
+  );
+
+  const urgentCount = useMemo(
+    () => state.tasks.filter(t => t.status === 'activa' && t.urgent === true).length,
     [state.tasks]
   );
 
@@ -237,6 +242,30 @@ export function TopBar() {
               }}
             >
               <CalendarClock className="w-3 h-3" /> Vencidas a Hoy
+            </Button>
+          )}
+
+          {urgentCount > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs gap-1 border-red-200 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-800 dark:bg-red-950 dark:text-red-300"
+              onClick={async () => {
+                try {
+                  const result = await moveUrgentToActionAsync('UI');
+                  if (result.moved > 0) {
+                    toast({ title: "Urgentes movidas", description: `${result.moved} tarea(s) movidas a ACCION.` });
+                  } else {
+                    toast({ title: "Sin cambios", description: "No hay tareas urgentes." });
+                  }
+                } catch {
+                  toast({ variant: "destructive", title: "Error", description: "No se pudieron mover las tareas." });
+                }
+              }}
+            >
+              <Zap className="w-3 h-3" />
+              <span className="hidden sm:inline">Urgentes → Acción</span>
+              <span className="font-bold">{urgentCount}</span>
             </Button>
           )}
 

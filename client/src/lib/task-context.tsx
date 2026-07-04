@@ -13,6 +13,7 @@ interface TaskContextValue {
   };
   dispatch: (action: Action) => void;
   moveExpiredAsync: (source: string) => Promise<{ moved: number; date: string }>;
+  moveUrgentToActionAsync: (source: string) => Promise<{ moved: number }>;
   undo: () => void;
   redo: () => void;
   canUndo: boolean;
@@ -25,6 +26,7 @@ type Action =
   | { type: 'DELETE_TASK'; payload: { id: number }; source: string }
   | { type: 'COMPLETE_TASK'; payload: { id: number }; source: string }
   | { type: 'MOVE_EXPIRED'; source: string }
+  | { type: 'MOVE_URGENT_TO_ACTION'; source: string }
   | { type: 'IMPORT_CSV'; payload: Partial<Task>[]; source: string }
   | { type: 'DELETE_ALL_ACTIVE'; source: string };
 
@@ -104,6 +106,18 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     return moveExpiredMutation.mutateAsync({ source });
   }, [moveExpiredMutation]);
 
+  const moveUrgentToActionMutation = useMutation({
+    mutationFn: async (data: { source: string }): Promise<{ moved: number }> => {
+      const res = await apiRequest('POST', '/api/tasks/urgent-to-action', { source: data.source });
+      return res.json();
+    },
+    onSuccess: invalidate,
+  });
+
+  const moveUrgentToActionAsync = useCallback(async (source: string) => {
+    return moveUrgentToActionMutation.mutateAsync({ source });
+  }, [moveUrgentToActionMutation]);
+
   const deleteAllMutation = useMutation({
     mutationFn: async (data: { source: string }) => {
       const res = await apiRequest('POST', '/api/tasks/delete-all', { source: data.source });
@@ -139,6 +153,9 @@ export function TaskProvider({ children }: { children: ReactNode }) {
       case 'MOVE_EXPIRED':
         moveExpiredMutation.mutate({ source: action.source });
         break;
+      case 'MOVE_URGENT_TO_ACTION':
+        moveUrgentToActionMutation.mutate({ source: action.source });
+        break;
       case 'IMPORT_CSV':
         importMutation.mutate({ tasks: action.payload, source: action.source });
         break;
@@ -146,7 +163,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
         deleteAllMutation.mutate({ source: action.source });
         break;
     }
-  }, [createMutation, updateMutation, deleteMutation, completeMutation, moveExpiredMutation, importMutation, deleteAllMutation]);
+  }, [createMutation, updateMutation, deleteMutation, completeMutation, moveExpiredMutation, moveUrgentToActionMutation, importMutation, deleteAllMutation]);
 
   const addToHistory = useCallback((newTasks: Task[]) => {
     setHistory(prev => [...prev.slice(0, historyIndex + 1), newTasks]);
@@ -181,6 +198,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
       state,
       dispatch,
       moveExpiredAsync,
+      moveUrgentToActionAsync,
       undo,
       redo,
       canUndo: historyIndex > 0,

@@ -171,6 +171,29 @@ export async function registerRoutes(
     res.json({ moved: count, date: todayStr });
   });
 
+  // Move all urgent tasks to action
+  app.post("/api/tasks/urgent-to-action", async (req, res) => {
+    const activeTasks = await storage.getActiveTasks();
+    let count = 0;
+
+    for (const task of activeTasks) {
+      if (task.urgent === true) {
+        await storage.updateTask(task.id, { urgent: false, type: 'accion' });
+        count++;
+      }
+    }
+
+    if (count > 0) {
+      await storage.createLog({
+        action: "MOVE_URGENT_TO_ACTION",
+        details: `Moved ${count} urgent tasks to action`,
+        source: req.body?.source || "UI",
+      });
+    }
+
+    res.json({ moved: count });
+  });
+
   // Delete all active tasks
   app.post("/api/tasks/delete-all", async (req, res) => {
     const count = await storage.deleteAllActive();
