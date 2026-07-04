@@ -73,7 +73,7 @@ export async function registerRoutes(
   });
 
   // Update a task
-  app.patch("/api/tasks/:id", async (req, res) => {
+  app.put("/api/tasks/:id", async (req, res) => {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
 
@@ -118,7 +118,7 @@ export async function registerRoutes(
   });
 
   // Delete a task (soft delete)
-  app.post("/api/tasks/:id/delete", async (req, res) => {
+  app.delete("/api/tasks/:id", async (req, res) => {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
 

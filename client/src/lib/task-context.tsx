@@ -86,7 +86,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
 
   const deleteMutation = useMutation({
     mutationFn: async (data: { id: number; source: string }) => {
-      const res = await apiRequest('POST', `/api/tasks/${data.id}/delete`, { source: data.source });
+      const res = await apiRequest('DELETE', `/api/tasks/${data.id}`, { source: data.source });
       return res.json();
     },
     onSuccess: invalidate,

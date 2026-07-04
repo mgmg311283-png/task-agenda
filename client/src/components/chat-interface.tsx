@@ -1,3 +1,4 @@
+import { v4 as uuidv4 } from "uuid";
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Mic, Send, Terminal, Bot, User, Loader2, WifiOff } from 'lucide-react';
@@ -65,7 +66,7 @@ export function ChatInterface() {
 
   const addMessage = useCallback((role: 'user' | 'system', text: string, type: 'success' | 'error' | 'info' = 'info') => {
     setMessages(prev => [...prev, {
-      id: crypto.randomUUID(),
+      id: uuidv4(),
       role,
       text,
       timestamp: new Date(),
@@ -79,7 +80,7 @@ export function ChatInterface() {
     try {
       const existingTaskIds = state.tasks.map(t => t.id);
 
-      const response = await fetch('/api/parse', {
+      const response = await fetch(`${window.location.protocol}//${window.location.hostname}:3002/api/parse`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text, existingTaskIds }),

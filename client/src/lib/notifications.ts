@@ -1,3 +1,4 @@
+import { v4 as uuidv4 } from "uuid";
 export interface Notification {
   id: string;
   type: 'success' | 'error' | 'info' | 'warning';
@@ -15,7 +16,7 @@ export class NotificationManager {
   private notifications: Map<string, Notification> = new Map();
 
   add(notification: Omit<Notification, 'id' | 'timestamp'>): string {
-    const id = crypto.randomUUID();
+    const id = uuidv4();
     const fullNotification: Notification = {
       ...notification,
       id,
