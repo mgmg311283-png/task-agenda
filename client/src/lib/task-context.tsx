@@ -32,10 +32,16 @@ type Action =
 
 const TaskContext = createContext<TaskContextValue | null>(null);
 
+interface HistoryEntry {
+  id: number;
+  before: Partial<Task>;
+  after: Partial<Task>;
+}
+
 export function TaskProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
-  const [history, setHistory] = useState<Task[][]>([]);
-  const [historyIndex, setHistoryIndex] = useState<number>(-1);
+  const [undoStack, setUndoStack] = useState<HistoryEntry[]>([]);
+  const [redoStack, setRedoStack] = useState<HistoryEntry[]>([]);
 
   const { data: tasks = [], isLoading: tasksLoading } = useQuery<Task[]>({
     queryKey: ['/api/tasks'],
@@ -136,20 +142,43 @@ export function TaskProvider({ children }: { children: ReactNode }) {
 
   const lastId = tasks.length > 0 ? Math.max(...tasks.map(t => t.id)) : 0;
 
+  const findTask = useCallback((id: number) => {
+    return tasks.find(t => t.id === id) || allTasks.find(t => t.id === id);
+  }, [tasks, allTasks]);
+
+  const recordHistory = useCallback((entry: HistoryEntry) => {
+    setUndoStack(prev => [...prev, entry]);
+    setRedoStack([]);
+  }, []);
+
   const dispatch = useCallback((action: Action) => {
     switch (action.type) {
       case 'ADD_TASK':
         createMutation.mutate({ task: action.payload, source: action.source });
         break;
-      case 'UPDATE_TASK':
+      case 'UPDATE_TASK': {
+        const current = findTask(action.payload.id);
+        if (current) {
+          const keys = Object.keys(action.payload.updates) as (keyof Task)[];
+          const before: Partial<Task> = {};
+          keys.forEach(k => { (before as any)[k] = current[k]; });
+          recordHistory({ id: action.payload.id, before, after: action.payload.updates });
+        }
         updateMutation.mutate({ id: action.payload.id, updates: action.payload.updates, source: action.source });
         break;
-      case 'DELETE_TASK':
+      }
+      case 'DELETE_TASK': {
+        const current = findTask(action.payload.id);
+        recordHistory({ id: action.payload.id, before: { status: current?.status || 'activa' }, after: { status: 'eliminada' } });
         deleteMutation.mutate({ id: action.payload.id, source: action.source });
         break;
-      case 'COMPLETE_TASK':
+      }
+      case 'COMPLETE_TASK': {
+        const current = findTask(action.payload.id);
+        recordHistory({ id: action.payload.id, before: { status: current?.status || 'activa' }, after: { status: 'completada' } });
         completeMutation.mutate({ id: action.payload.id, source: action.source });
         break;
+      }
       case 'MOVE_EXPIRED':
         moveExpiredMutation.mutate({ source: action.source });
         break;
@@ -163,27 +192,27 @@ export function TaskProvider({ children }: { children: ReactNode }) {
         deleteAllMutation.mutate({ source: action.source });
         break;
     }
-  }, [createMutation, updateMutation, deleteMutation, completeMutation, moveExpiredMutation, moveUrgentToActionMutation, importMutation, deleteAllMutation]);
-
-  const addToHistory = useCallback((newTasks: Task[]) => {
-    setHistory(prev => [...prev.slice(0, historyIndex + 1), newTasks]);
-    setHistoryIndex(prev => prev + 1);
-  }, [historyIndex]);
+  }, [createMutation, updateMutation, deleteMutation, completeMutation, moveExpiredMutation, moveUrgentToActionMutation, importMutation, deleteAllMutation, findTask, recordHistory]);
 
   const undo = useCallback(() => {
-    if (historyIndex > 0) {
-      setHistoryIndex(prev => prev - 1);
-      // Refetch to reload from history
-      queryClient.invalidateQueries({ queryKey: ['/api/tasks'] });
-    }
-  }, [historyIndex, queryClient]);
+    setUndoStack(prev => {
+      if (prev.length === 0) return prev;
+      const entry = prev[prev.length - 1];
+      updateMutation.mutate({ id: entry.id, updates: entry.before, source: 'UI' });
+      setRedoStack(r => [...r, entry]);
+      return prev.slice(0, -1);
+    });
+  }, [updateMutation]);
 
   const redo = useCallback(() => {
-    if (historyIndex < history.length - 1) {
-      setHistoryIndex(prev => prev + 1);
-      queryClient.invalidateQueries({ queryKey: ['/api/tasks'] });
-    }
-  }, [historyIndex, history.length, queryClient]);
+    setRedoStack(prev => {
+      if (prev.length === 0) return prev;
+      const entry = prev[prev.length - 1];
+      updateMutation.mutate({ id: entry.id, updates: entry.after, source: 'UI' });
+      setUndoStack(u => [...u, entry]);
+      return prev.slice(0, -1);
+    });
+  }, [updateMutation]);
 
   const state = {
     tasks,
@@ -201,8 +230,8 @@ export function TaskProvider({ children }: { children: ReactNode }) {
       moveUrgentToActionAsync,
       undo,
       redo,
-      canUndo: historyIndex > 0,
-      canRedo: historyIndex < history.length - 1
+      canUndo: undoStack.length > 0,
+      canRedo: redoStack.length > 0
     }}>
       {children}
     </TaskContext.Provider>

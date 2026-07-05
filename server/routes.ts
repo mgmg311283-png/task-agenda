@@ -73,7 +73,7 @@ export async function registerRoutes(
   });
 
   // Update a task
-  app.put("/api/tasks/:id", async (req, res) => {
+  app.patch("/api/tasks/:id", async (req, res) => {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
 

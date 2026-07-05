@@ -80,7 +80,7 @@ export function ChatInterface() {
     try {
       const existingTaskIds = state.tasks.map(t => t.id);
 
-      const response = await fetch(`${window.location.protocol}//${window.location.hostname}:3002/api/parse`, {
+      const response = await fetch(`/api/parse`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text, existingTaskIds }),

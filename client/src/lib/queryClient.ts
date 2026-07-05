@@ -8,11 +8,8 @@ async function throwIfResNotOk(res: Response) {
 }
 
 function getApiUrl(path: string): string {
-  if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-    const protocol = window.location.protocol;
-    return `${protocol}//${hostname}:3002${path}`;
-  }
+  // La API y el cliente se sirven desde el mismo proceso/origen (puerto 5000).
+  // Usar rutas relativas al mismo origen.
   return path;
 }
 
