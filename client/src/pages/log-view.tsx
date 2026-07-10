@@ -1,10 +1,15 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, Search, X } from "lucide-react";
+import { ChevronLeft, Search, X, RotateCcw } from "lucide-react";
 import { useTasks } from "@/lib/task-context";
 import { format } from "date-fns";
 import { useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
+import { Task } from "@/lib/types";
+import { toast } from "@/hooks/use-toast";
+
+const REVERTIBLE_ACTIONS = ['CREATE', 'UPDATE', 'COMPLETE', 'DELETE'];
+const TASK_FIELDS: (keyof Task)[] = ['text', 'date', 'person', 'type', 'urgent', 'status', 'starred', 'priority'];
 
 const ACTION_COLORS: Record<string, string> = {
   CREATE: 'text-green-700 bg-green-50 dark:bg-green-950 dark:text-green-300',
@@ -20,7 +25,7 @@ const ALL_ACTIONS = ['CREATE', 'UPDATE', 'COMPLETE', 'DELETE', 'IMPORT', 'MOVE_E
 const ALL_SOURCES = ['UI', 'Chat', 'Audio', 'Import'];
 
 export function LogView() {
-  const { state } = useTasks();
+  const { state, dispatch } = useTasks();
   const [search, setSearch] = useState('');
   const [actionFilter, setActionFilter] = useState<string>('');
   const [sourceFilter, setSourceFilter] = useState<string>('');
@@ -39,6 +44,22 @@ export function LogView() {
   }, [state.logs, actionFilter, sourceFilter, search]);
 
   const hasFilters = actionFilter || sourceFilter || search;
+
+  const handleRevert = (log: (typeof state.logs)[number], originalVals: any) => {
+    if (!log.taskId) return;
+    if (!confirm(`¿Revertir este cambio en la tarea #${log.taskId}?`)) return;
+
+    if (log.action === 'CREATE') {
+      dispatch({ type: 'UPDATE_TASK', payload: { id: log.taskId, updates: { status: 'eliminada' } }, source: 'UI' });
+    } else if (originalVals) {
+      const updates: Partial<Task> = {};
+      TASK_FIELDS.forEach(f => {
+        if (f in originalVals) (updates as any)[f] = originalVals[f];
+      });
+      dispatch({ type: 'UPDATE_TASK', payload: { id: log.taskId, updates }, source: 'UI' });
+    }
+    toast({ title: "Revertido", description: `Tarea #${log.taskId} restaurada a su estado anterior.` });
+  };
 
   return (
     <div className="min-h-screen bg-background p-4 max-w-5xl mx-auto">
@@ -129,6 +150,8 @@ export function LogView() {
             try { if (log.originalValues) originalVals = JSON.parse(log.originalValues); } catch {}
             try { if (log.newValues) newVals = JSON.parse(log.newValues); } catch {}
 
+            const canRevert = !!log.taskId && REVERTIBLE_ACTIONS.includes(log.action) && (log.action === 'CREATE' || !!originalVals);
+
             return (
               <div
                 key={log.id}
@@ -149,6 +172,17 @@ export function LogView() {
                   {log.taskId ? (
                     <span className="text-muted-foreground shrink-0">#{log.taskId}</span>
                   ) : null}
+                  {canRevert && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 shrink-0"
+                      title="Revertir este cambio"
+                      onClick={(e) => { e.stopPropagation(); handleRevert(log, originalVals); }}
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                    </Button>
+                  )}
                 </div>
 
                 {isExpanded && (originalVals || newVals) && (

@@ -18,7 +18,7 @@ export interface IStorage {
   updateTask(id: number, updates: UpdateTask): Promise<Task | undefined>;
   deleteTask(id: number): Promise<Task | undefined>;
   completeTask(id: number): Promise<Task | undefined>;
-  deleteAllActive(): Promise<number>;
+  deleteAllActive(): Promise<Task[]>;
   importTasks(tasksData: InsertTask[]): Promise<Task[]>;
   getNextId(): Promise<number>;
 
@@ -62,12 +62,11 @@ export class DatabaseStorage implements IStorage {
     return this.updateTask(id, { status: "completada" });
   }
 
-  async deleteAllActive(): Promise<number> {
-    const result = await db.update(tasks)
+  async deleteAllActive(): Promise<Task[]> {
+    return db.update(tasks)
       .set({ status: "eliminada", updatedAt: new Date() })
       .where(eq(tasks.status, "activa"))
       .returning();
-    return result.length;
   }
 
   async importTasks(tasksData: InsertTask[]): Promise<Task[]> {

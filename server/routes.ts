@@ -104,6 +104,9 @@ export async function registerRoutes(
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
 
+    const original = await storage.getTaskById(id);
+    if (!original) return res.status(404).json({ message: "Task not found" });
+
     const task = await storage.completeTask(id);
     if (!task) return res.status(404).json({ message: "Task not found" });
 
@@ -111,6 +114,8 @@ export async function registerRoutes(
       action: "COMPLETE",
       details: `Completed task #${id}: "${task.text}"`,
       taskId: id,
+      originalValues: JSON.stringify(original),
+      newValues: JSON.stringify(task),
       source: req.body?.source || "UI",
     });
 
@@ -122,6 +127,9 @@ export async function registerRoutes(
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
 
+    const original = await storage.getTaskById(id);
+    if (!original) return res.status(404).json({ message: "Task not found" });
+
     const task = await storage.deleteTask(id);
     if (!task) return res.status(404).json({ message: "Task not found" });
 
@@ -129,6 +137,8 @@ export async function registerRoutes(
       action: "DELETE",
       details: `Deleted task #${id}: "${task.text}"`,
       taskId: id,
+      originalValues: JSON.stringify(original),
+      newValues: JSON.stringify(task),
       source: req.body?.source || "UI",
     });
 
@@ -140,14 +150,14 @@ export async function registerRoutes(
     const today = startOfDay(new Date());
 
     const activeTasks = await storage.getActiveTasks();
-    let count = 0;
+    const changes: { id: number; before: string; after: string }[] = [];
 
     const todayStr = format(today, "dd/MM/yy");
 
     for (const task of activeTasks) {
       if (task.date === "a definir") {
         await storage.updateTask(task.id, { date: todayStr });
-        count++;
+        changes.push({ id: task.id, before: task.date, after: todayStr });
         continue;
       }
       const taskDate = parseTaskDate(task.date);
@@ -156,55 +166,55 @@ export async function registerRoutes(
           ? format(today, "dd/MM/yyyy")
           : format(today, "dd/MM/yy");
         await storage.updateTask(task.id, { date: todayFmt });
-        count++;
+        changes.push({ id: task.id, before: task.date, after: todayFmt });
       }
     }
 
-    if (count > 0) {
+    if (changes.length > 0) {
       await storage.createLog({
         action: "MOVE_EXPIRED",
-        details: `Moved ${count} expired tasks to today (${todayStr})`,
+        details: `Moved ${changes.length} expired tasks to today (${todayStr})`,
         source: req.body?.source || "UI",
       });
     }
 
-    res.json({ moved: count, date: todayStr });
+    res.json({ moved: changes.length, date: todayStr, changes });
   });
 
   // Move all urgent tasks to action
   app.post("/api/tasks/urgent-to-action", async (req, res) => {
     const activeTasks = await storage.getActiveTasks();
-    let count = 0;
+    const changes: { id: number; beforeType: string }[] = [];
 
     for (const task of activeTasks) {
       if (task.urgent === true) {
         await storage.updateTask(task.id, { urgent: false, type: 'accion' });
-        count++;
+        changes.push({ id: task.id, beforeType: task.type });
       }
     }
 
-    if (count > 0) {
+    if (changes.length > 0) {
       await storage.createLog({
         action: "MOVE_URGENT_TO_ACTION",
-        details: `Moved ${count} urgent tasks to action`,
+        details: `Moved ${changes.length} urgent tasks to action`,
         source: req.body?.source || "UI",
       });
     }
 
-    res.json({ moved: count });
+    res.json({ moved: changes.length, changes });
   });
 
   // Delete all active tasks
   app.post("/api/tasks/delete-all", async (req, res) => {
-    const count = await storage.deleteAllActive();
+    const deletedTasks = await storage.deleteAllActive();
 
     await storage.createLog({
       action: "DELETE_ALL",
-      details: `Deleted ${count} active tasks`,
+      details: `Deleted ${deletedTasks.length} active tasks`,
       source: req.body?.source || "UI",
     });
 
-    res.json({ deleted: count });
+    res.json({ deleted: deletedTasks.length, ids: deletedTasks.map(t => t.id) });
   });
 
   // Import tasks (bulk create)

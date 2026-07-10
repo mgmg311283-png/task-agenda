@@ -32,10 +32,14 @@ type Action =
 
 const TaskContext = createContext<TaskContextValue | null>(null);
 
-interface HistoryEntry {
+interface HistoryItem {
   id: number;
   before: Partial<Task>;
   after: Partial<Task>;
+}
+
+interface HistoryEntry {
+  items: HistoryItem[];
 }
 
 export function TaskProvider({ children }: { children: ReactNode }) {
@@ -68,8 +72,14 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     queryClient.invalidateQueries({ queryKey: ['/api/logs'] });
   }, [queryClient]);
 
+  const recordHistory = useCallback((items: HistoryItem[]) => {
+    if (items.length === 0) return;
+    setUndoStack(prev => [...prev, { items }]);
+    setRedoStack([]);
+  }, []);
+
   const createMutation = useMutation({
-    mutationFn: async (data: { task: Partial<Task>; source: string }) => {
+    mutationFn: async (data: { task: Partial<Task>; source: string }): Promise<Task> => {
       const res = await apiRequest('POST', '/api/tasks', { ...data.task, source: data.source });
       return res.json();
     },
@@ -101,11 +111,14 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   });
 
   const moveExpiredMutation = useMutation({
-    mutationFn: async (data: { source: string }): Promise<{ moved: number; date: string }> => {
+    mutationFn: async (data: { source: string }): Promise<{ moved: number; date: string; changes: { id: number; before: string; after: string }[] }> => {
       const res = await apiRequest('POST', '/api/tasks/move-expired', { source: data.source });
       return res.json();
     },
-    onSuccess: invalidate,
+    onSuccess: (result) => {
+      recordHistory(result.changes.map(c => ({ id: c.id, before: { date: c.before }, after: { date: c.after } })));
+      invalidate();
+    },
   });
 
   const moveExpiredAsync = useCallback(async (source: string) => {
@@ -113,11 +126,18 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   }, [moveExpiredMutation]);
 
   const moveUrgentToActionMutation = useMutation({
-    mutationFn: async (data: { source: string }): Promise<{ moved: number }> => {
+    mutationFn: async (data: { source: string }): Promise<{ moved: number; changes: { id: number; beforeType: string }[] }> => {
       const res = await apiRequest('POST', '/api/tasks/urgent-to-action', { source: data.source });
       return res.json();
     },
-    onSuccess: invalidate,
+    onSuccess: (result) => {
+      recordHistory(result.changes.map(c => ({
+        id: c.id,
+        before: { urgent: true, type: c.beforeType as Task['type'] },
+        after: { urgent: false, type: 'accion' },
+      })));
+      invalidate();
+    },
   });
 
   const moveUrgentToActionAsync = useCallback(async (source: string) => {
@@ -125,19 +145,25 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   }, [moveUrgentToActionMutation]);
 
   const deleteAllMutation = useMutation({
-    mutationFn: async (data: { source: string }) => {
+    mutationFn: async (data: { source: string }): Promise<{ deleted: number; ids: number[] }> => {
       const res = await apiRequest('POST', '/api/tasks/delete-all', { source: data.source });
       return res.json();
     },
-    onSuccess: invalidate,
+    onSuccess: (result) => {
+      recordHistory(result.ids.map(id => ({ id, before: { status: 'activa' }, after: { status: 'eliminada' } })));
+      invalidate();
+    },
   });
 
   const importMutation = useMutation({
-    mutationFn: async (data: { tasks: Partial<Task>[]; source: string }) => {
+    mutationFn: async (data: { tasks: Partial<Task>[]; source: string }): Promise<Task[]> => {
       const res = await apiRequest('POST', '/api/tasks/import', { tasks: data.tasks });
       return res.json();
     },
-    onSuccess: invalidate,
+    onSuccess: (created) => {
+      recordHistory(created.map(t => ({ id: t.id, before: { status: 'eliminada' }, after: { status: 'activa' } })));
+      invalidate();
+    },
   });
 
   const lastId = tasks.length > 0 ? Math.max(...tasks.map(t => t.id)) : 0;
@@ -146,15 +172,14 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     return tasks.find(t => t.id === id) || allTasks.find(t => t.id === id);
   }, [tasks, allTasks]);
 
-  const recordHistory = useCallback((entry: HistoryEntry) => {
-    setUndoStack(prev => [...prev, entry]);
-    setRedoStack([]);
-  }, []);
-
   const dispatch = useCallback((action: Action) => {
     switch (action.type) {
       case 'ADD_TASK':
-        createMutation.mutate({ task: action.payload, source: action.source });
+        createMutation.mutate({ task: action.payload, source: action.source }, {
+          onSuccess: (created) => {
+            recordHistory([{ id: created.id, before: { status: 'eliminada' }, after: { status: 'activa' } }]);
+          },
+        });
         break;
       case 'UPDATE_TASK': {
         const current = findTask(action.payload.id);
@@ -162,20 +187,20 @@ export function TaskProvider({ children }: { children: ReactNode }) {
           const keys = Object.keys(action.payload.updates) as (keyof Task)[];
           const before: Partial<Task> = {};
           keys.forEach(k => { (before as any)[k] = current[k]; });
-          recordHistory({ id: action.payload.id, before, after: action.payload.updates });
+          recordHistory([{ id: action.payload.id, before, after: action.payload.updates }]);
         }
         updateMutation.mutate({ id: action.payload.id, updates: action.payload.updates, source: action.source });
         break;
       }
       case 'DELETE_TASK': {
         const current = findTask(action.payload.id);
-        recordHistory({ id: action.payload.id, before: { status: current?.status || 'activa' }, after: { status: 'eliminada' } });
+        recordHistory([{ id: action.payload.id, before: { status: current?.status || 'activa' }, after: { status: 'eliminada' } }]);
         deleteMutation.mutate({ id: action.payload.id, source: action.source });
         break;
       }
       case 'COMPLETE_TASK': {
         const current = findTask(action.payload.id);
-        recordHistory({ id: action.payload.id, before: { status: current?.status || 'activa' }, after: { status: 'completada' } });
+        recordHistory([{ id: action.payload.id, before: { status: current?.status || 'activa' }, after: { status: 'completada' } }]);
         completeMutation.mutate({ id: action.payload.id, source: action.source });
         break;
       }
@@ -194,25 +219,31 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     }
   }, [createMutation, updateMutation, deleteMutation, completeMutation, moveExpiredMutation, moveUrgentToActionMutation, importMutation, deleteAllMutation, findTask, recordHistory]);
 
+  const applyItems = useCallback((items: HistoryItem[], direction: 'before' | 'after') => {
+    items.forEach(item => {
+      updateMutation.mutate({ id: item.id, updates: item[direction], source: 'UI' });
+    });
+  }, [updateMutation]);
+
   const undo = useCallback(() => {
     setUndoStack(prev => {
       if (prev.length === 0) return prev;
       const entry = prev[prev.length - 1];
-      updateMutation.mutate({ id: entry.id, updates: entry.before, source: 'UI' });
+      applyItems(entry.items, 'before');
       setRedoStack(r => [...r, entry]);
       return prev.slice(0, -1);
     });
-  }, [updateMutation]);
+  }, [applyItems]);
 
   const redo = useCallback(() => {
     setRedoStack(prev => {
       if (prev.length === 0) return prev;
       const entry = prev[prev.length - 1];
-      updateMutation.mutate({ id: entry.id, updates: entry.after, source: 'UI' });
+      applyItems(entry.items, 'after');
       setUndoStack(u => [...u, entry]);
       return prev.slice(0, -1);
     });
-  }, [updateMutation]);
+  }, [applyItems]);
 
   const state = {
     tasks,
