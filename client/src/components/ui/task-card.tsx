@@ -62,6 +62,22 @@ function advanceSevenDays(dateStr: string): string {
   return formatDate(next);
 }
 
+function advanceFourteenDays(dateStr: string): string {
+  const base = parseDateStr(dateStr);
+  const from = base || new Date();
+  const next = new Date(from);
+  next.setDate(next.getDate() + 14);
+  return formatDate(next);
+}
+
+function advanceThirtyDays(dateStr: string): string {
+  const base = parseDateStr(dateStr);
+  const from = base || new Date();
+  const next = new Date(from);
+  next.setDate(next.getDate() + 30);
+  return formatDate(next);
+}
+
 function getColumnForTask(task: Task): string {
   if (task.urgent) return 'urgent';
   if (task.type === 'para_pensar') return 'think';
@@ -437,6 +453,36 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate, onDuplicate }: 
             >
               <ChevronRight className="w-3 h-3" />
               <span>7d</span>
+            </button>
+
+            {/* +14 days */}
+            <button
+              className="font-mono text-xs text-muted-foreground hover:text-foreground hover:bg-muted px-1 rounded-none transition-colors flex items-center gap-0.5"
+              onClick={(e) => {
+                e.stopPropagation();
+                onUpdate(task.id, { date: advanceFourteenDays(task.date) });
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              title="Mover 14 días adelante"
+              data-testid={`btn-plus14d-${task.id}`}
+            >
+              <ChevronRight className="w-3 h-3" />
+              <span>14d</span>
+            </button>
+
+            {/* +30 days */}
+            <button
+              className="font-mono text-xs text-muted-foreground hover:text-foreground hover:bg-muted px-1 rounded-none transition-colors flex items-center gap-0.5"
+              onClick={(e) => {
+                e.stopPropagation();
+                onUpdate(task.id, { date: advanceThirtyDays(task.date) });
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              title="Mover 30 días adelante"
+              data-testid={`btn-plus30d-${task.id}`}
+            >
+              <ChevronRight className="w-3 h-3" />
+              <span>30d</span>
             </button>
 
           </div>
