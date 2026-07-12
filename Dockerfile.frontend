@@ -9,4 +9,4 @@ COPY dist/public ./public
 EXPOSE 5000
 
 # Use http-server with --proxy to forward /api requests to port 3002
-CMD ["http-server", "public", "-p", "5000", "-c-1", "--spa", "index.html", "--proxy", "http://localhost:3002"]
+CMD ["http-server", "public", "-p", "5000", "-c-1", "--spa", "index.html", "--proxy", "http://task-api-container:3002"]
