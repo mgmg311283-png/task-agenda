@@ -4,13 +4,16 @@ import { ThemeProvider } from "next-themes";
 import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { TaskProvider } from "@/lib/task-context";
+import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { Dashboard } from "@/pages/dashboard";
 import { LogView } from "@/pages/log-view";
 import { MetricsView } from "@/pages/metrics-view";
+import { MyTasks } from "@/pages/my-tasks";
+import { LoginPage } from "@/pages/login";
 import NotFound from "@/pages/not-found";
 import { ErrorBoundary } from "@/components/error-boundary";
 
-function Router() {
+function AdminRouter() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
@@ -21,16 +24,49 @@ function Router() {
   );
 }
 
+function OperarioRouter() {
+  // Vista simplificada: sin kanban, sin metricas, sin import/export.
+  return (
+    <Switch>
+      <Route path="/" component={MyTasks} />
+      <Route component={MyTasks} />
+    </Switch>
+  );
+}
+
+function AuthGate() {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-sm text-muted-foreground">Cargando...</p>
+      </div>
+    );
+  }
+
+  if (!user) return <LoginPage />;
+
+  // TaskProvider se monta DESPUES del login a proposito: arranca a pollear
+  // /api/tasks, /api/tasks/all y /api/logs al montarse, y si estuviera por
+  // fuera del gate esas queries darian 401 en loop en la pantalla de login.
+  return (
+    <TaskProvider>
+      <ErrorBoundary>
+        {user.role === "admin" ? <AdminRouter /> : <OperarioRouter />}
+      </ErrorBoundary>
+      <Toaster />
+    </TaskProvider>
+  );
+}
+
 function App() {
   return (
     <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
       <QueryClientProvider client={queryClient}>
-        <TaskProvider>
-          <ErrorBoundary>
-            <Router />
-          </ErrorBoundary>
-          <Toaster />
-        </TaskProvider>
+        <AuthProvider>
+          <AuthGate />
+        </AuthProvider>
       </QueryClientProvider>
     </ThemeProvider>
   );

@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { randomUUID } from "node:crypto";
 import { storage } from "./storage";
 import { requireAuth, requireAdmin, getScope } from "./auth";
+import { diffLog, describeAction } from "./audit";
 import { insertTaskSchema, updateTaskSchema } from "@shared/schema";
 import { parse, isValid, isBefore, startOfDay, format } from "date-fns";
 import OpenAI from "openai";
@@ -94,7 +95,22 @@ export async function registerRoutes(
     const task = await storage.getTaskForScope(id, getScope(req));
     if (!task) return res.status(404).json({ message: "Task not found" });
 
-    const events = await storage.getTaskHistory(id);
+    const raw = await storage.getTaskHistory(id);
+    const events = raw.map((e) => ({
+      id: e.id,
+      timestamp: e.timestamp,
+      action: e.action,
+      actionLabel: describeAction(e.action),
+      details: e.details,
+      source: e.source,
+      batchId: e.batchId,
+      // Los logs anteriores al login no tienen autor: se muestra asi, en vez
+      // de atribuirselos a alguien.
+      user: e.userId ? { id: e.userId, name: e.userName } : null,
+      // En una creacion los "cambios" son en realidad los valores iniciales,
+      // y listarlos como cambios confunde ("Se editó el texto" al crearla).
+      changes: e.action === "CREATE" ? [] : diffLog(e),
+    }));
     res.json({ task, events });
   });
 
