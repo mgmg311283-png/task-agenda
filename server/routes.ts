@@ -1,6 +1,8 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import { randomUUID } from "node:crypto";
 import { storage } from "./storage";
+import { requireAuth, requireAdmin, getScope } from "./auth";
 import { insertTaskSchema, updateTaskSchema } from "@shared/schema";
 import { parse, isValid, isBefore, startOfDay, format } from "date-fns";
 import OpenAI from "openai";
@@ -34,34 +36,46 @@ export async function registerRoutes(
 
   // ---- TASKS ----
 
-  // Get all active tasks
-  app.get("/api/tasks", async (_req, res) => {
-    const tasks = await storage.getActiveTasks();
+  // Get all active tasks (filtradas por scope del usuario)
+  app.get("/api/tasks", requireAuth, async (req, res) => {
+    const tasks = await storage.getActiveTasks(getScope(req));
     res.json(tasks);
   });
 
   // Get all tasks (including completed/deleted) for metrics
-  app.get("/api/tasks/all", async (_req, res) => {
-    const tasks = await storage.getAllTasks();
+  app.get("/api/tasks/all", requireAuth, async (req, res) => {
+    const tasks = await storage.getAllTasks(getScope(req));
     res.json(tasks);
   });
 
   // Get next available ID
-  app.get("/api/tasks/next-id", async (_req, res) => {
+  app.get("/api/tasks/next-id", requireAuth, async (_req, res) => {
     const nextId = await storage.getNextId();
     res.json({ nextId });
   });
 
   // Create a task
-  app.post("/api/tasks", async (req, res) => {
+  app.post("/api/tasks", requireAuth, async (req, res) => {
     try {
+      const scope = getScope(req);
       const parsed = insertTaskSchema.parse(req.body);
-      const task = await storage.createTask(parsed);
+
+      // Un no-admin solo puede crear tareas para si mismo: se ignora lo que
+      // venga en el body para no permitir asignarle trabajo a otro.
+      const values: any = { ...parsed, createdByUserId: scope.userId };
+      if (scope.role !== "admin") {
+        values.assignedUserId = scope.userId;
+        const me = await storage.getUserById(scope.userId);
+        if (me) values.person = me.displayName;
+      }
+
+      const task = await storage.createTask(values);
 
       await storage.createLog({
         action: "CREATE",
         details: `Created task #${task.id}: "${task.text}"`,
         taskId: task.id,
+        userId: scope.userId,
         newValues: JSON.stringify(task),
         source: req.body.source || "UI",
       });
@@ -72,22 +86,45 @@ export async function registerRoutes(
     }
   });
 
+  // Historia completa de una tarea (quien cambio que y cuando)
+  app.get("/api/tasks/:id/history", requireAuth, async (req, res) => {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+
+    const task = await storage.getTaskForScope(id, getScope(req));
+    if (!task) return res.status(404).json({ message: "Task not found" });
+
+    const events = await storage.getTaskHistory(id);
+    res.json({ task, events });
+  });
+
   // Update a task
-  app.patch("/api/tasks/:id", async (req, res) => {
+  app.patch("/api/tasks/:id", requireAuth, async (req, res) => {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
 
     try {
-      const original = await storage.getTaskById(id);
+      const scope = getScope(req);
+      // getTaskForScope (no getTaskById): valida que la tarea sea VISIBLE
+      // para este usuario, no solo que exista. Devuelve 404 en vez de 403
+      // para no revelar la existencia de tareas ajenas.
+      const original = await storage.getTaskForScope(id, scope);
       if (!original) return res.status(404).json({ message: "Task not found" });
 
-      const parsed = updateTaskSchema.parse(req.body);
+      const parsed: any = updateTaskSchema.parse(req.body);
+      // Un no-admin no puede reasignar tareas (ni regalarlas ni robarlas).
+      if (scope.role !== "admin") {
+        delete parsed.assignedUserId;
+        delete parsed.person;
+        delete parsed.createdByUserId;
+      }
       const task = await storage.updateTask(id, parsed);
 
       await storage.createLog({
         action: "UPDATE",
         details: `Updated task #${id}`,
         taskId: id,
+        userId: scope.userId,
         originalValues: JSON.stringify(original),
         newValues: JSON.stringify(task),
         source: req.body.source || "UI",
@@ -100,11 +137,12 @@ export async function registerRoutes(
   });
 
   // Complete a task
-  app.post("/api/tasks/:id/complete", async (req, res) => {
+  app.post("/api/tasks/:id/complete", requireAuth, async (req, res) => {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
 
-    const original = await storage.getTaskById(id);
+    const scope = getScope(req);
+    const original = await storage.getTaskForScope(id, scope);
     if (!original) return res.status(404).json({ message: "Task not found" });
 
     const task = await storage.completeTask(id);
@@ -114,6 +152,7 @@ export async function registerRoutes(
       action: "COMPLETE",
       details: `Completed task #${id}: "${task.text}"`,
       taskId: id,
+      userId: scope.userId,
       originalValues: JSON.stringify(original),
       newValues: JSON.stringify(task),
       source: req.body?.source || "UI",
@@ -123,11 +162,12 @@ export async function registerRoutes(
   });
 
   // Delete a task (soft delete)
-  app.delete("/api/tasks/:id", async (req, res) => {
+  app.delete("/api/tasks/:id", requireAuth, async (req, res) => {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
 
-    const original = await storage.getTaskById(id);
+    const scope = getScope(req);
+    const original = await storage.getTaskForScope(id, scope);
     if (!original) return res.status(404).json({ message: "Task not found" });
 
     const task = await storage.deleteTask(id);
@@ -137,6 +177,7 @@ export async function registerRoutes(
       action: "DELETE",
       details: `Deleted task #${id}: "${task.text}"`,
       taskId: id,
+      userId: scope.userId,
       originalValues: JSON.stringify(original),
       newValues: JSON.stringify(task),
       source: req.body?.source || "UI",
@@ -146,10 +187,11 @@ export async function registerRoutes(
   });
 
   // Move expired tasks to today
-  app.post("/api/tasks/move-expired", async (req, res) => {
+  app.post("/api/tasks/move-expired", requireAuth, async (req, res) => {
     const today = startOfDay(new Date());
+    const scope = getScope(req);
 
-    const activeTasks = await storage.getActiveTasks();
+    const activeTasks = await storage.getActiveTasks(scope);
     const changes: { id: number; before: string; after: string }[] = [];
 
     const todayStr = format(today, "dd/MM/yy");
@@ -170,20 +212,32 @@ export async function registerRoutes(
       }
     }
 
+    // Una fila de log POR TAREA (antes se guardaba un solo log agregado y se
+    // descartaba el detalle, que es justamente el dato de "cuando se paso de
+    // fecha y a que fecha"). El batchId las agrupa como un unico evento.
     if (changes.length > 0) {
-      await storage.createLog({
-        action: "MOVE_EXPIRED",
-        details: `Moved ${changes.length} expired tasks to today (${todayStr})`,
-        source: req.body?.source || "UI",
-      });
+      const batchId = randomUUID();
+      await storage.createLogs(
+        changes.map((c) => ({
+          action: "MOVE_EXPIRED",
+          details: `Tarea #${c.id}: ${c.before} → ${c.after}`,
+          taskId: c.id,
+          batchId,
+          userId: scope.userId,
+          originalValues: JSON.stringify({ date: c.before }),
+          newValues: JSON.stringify({ date: c.after }),
+          source: req.body?.source || "UI",
+        })),
+      );
     }
 
     res.json({ moved: changes.length, date: todayStr, changes });
   });
 
   // Move all urgent tasks to action
-  app.post("/api/tasks/urgent-to-action", async (req, res) => {
-    const activeTasks = await storage.getActiveTasks();
+  app.post("/api/tasks/urgent-to-action", requireAuth, async (req, res) => {
+    const scope = getScope(req);
+    const activeTasks = await storage.getActiveTasks(scope);
     const changes: { id: number; beforeType: string }[] = [];
 
     for (const task of activeTasks) {
@@ -194,31 +248,56 @@ export async function registerRoutes(
     }
 
     if (changes.length > 0) {
-      await storage.createLog({
-        action: "MOVE_URGENT_TO_ACTION",
-        details: `Moved ${changes.length} urgent tasks to action`,
-        source: req.body?.source || "UI",
-      });
+      const batchId = randomUUID();
+      await storage.createLogs(
+        changes.map((c) => ({
+          action: "MOVE_URGENT_TO_ACTION",
+          details: `Tarea #${c.id}: urgente → acción`,
+          taskId: c.id,
+          batchId,
+          userId: scope.userId,
+          originalValues: JSON.stringify({ urgent: true, type: c.beforeType }),
+          newValues: JSON.stringify({ urgent: false, type: "accion" }),
+          source: req.body?.source || "UI",
+        })),
+      );
     }
 
     res.json({ moved: changes.length, changes });
   });
 
-  // Delete all active tasks
-  app.post("/api/tasks/delete-all", async (req, res) => {
-    const deletedTasks = await storage.deleteAllActive();
+  // Delete all active tasks — solo admin y con confirmacion explicita.
+  // Historicamente esto se disparo por accidente y borro tareas reales.
+  app.post("/api/tasks/delete-all", requireAdmin, async (req, res) => {
+    if (req.body?.confirm !== "ELIMINAR TODO") {
+      return res.status(400).json({
+        message: 'Confirmación requerida: enviar {"confirm":"ELIMINAR TODO"}',
+      });
+    }
+    const scope = getScope(req);
+    const deletedTasks = await storage.deleteAllActive(scope);
 
-    await storage.createLog({
-      action: "DELETE_ALL",
-      details: `Deleted ${deletedTasks.length} active tasks`,
-      source: req.body?.source || "UI",
-    });
+    if (deletedTasks.length > 0) {
+      const batchId = randomUUID();
+      await storage.createLogs(
+        deletedTasks.map((t) => ({
+          action: "DELETE_ALL",
+          details: `Tarea #${t.id} eliminada en borrado masivo`,
+          taskId: t.id,
+          batchId,
+          userId: scope.userId,
+          originalValues: JSON.stringify({ status: "activa" }),
+          newValues: JSON.stringify({ status: "eliminada" }),
+          source: req.body?.source || "UI",
+        })),
+      );
+    }
 
     res.json({ deleted: deletedTasks.length, ids: deletedTasks.map(t => t.id) });
   });
 
-  // Import tasks (bulk create)
-  app.post("/api/tasks/import", async (req, res) => {
+  // Import tasks (bulk create) — solo admin: puede setear person arbitrario
+  app.post("/api/tasks/import", requireAdmin, async (req, res) => {
     try {
       const tasksData = req.body.tasks;
       if (!Array.isArray(tasksData) || tasksData.length === 0) {
@@ -237,12 +316,22 @@ export async function registerRoutes(
       }));
 
       const created = await storage.importTasks(validTasks);
+      const scope = getScope(req);
 
-      await storage.createLog({
-        action: "IMPORT",
-        details: `Imported ${created.length} tasks`,
-        source: "Import",
-      });
+      if (created.length > 0) {
+        const batchId = randomUUID();
+        await storage.createLogs(
+          created.map((t) => ({
+            action: "IMPORT",
+            details: `Tarea #${t.id} importada: "${t.text}"`,
+            taskId: t.id,
+            batchId,
+            userId: scope.userId,
+            newValues: JSON.stringify(t),
+            source: "Import",
+          })),
+        );
+      }
 
       res.status(201).json(created);
     } catch (e: any) {
@@ -252,9 +341,9 @@ export async function registerRoutes(
 
   // ---- LOGS ----
 
-  app.get("/api/logs", async (req, res) => {
+  app.get("/api/logs", requireAuth, async (req, res) => {
     const limit = parseInt(req.query.limit as string) || 200;
-    const logEntries = await storage.getLogs(limit);
+    const logEntries = await storage.getLogs(limit, getScope(req));
     res.json(logEntries);
   });
 
@@ -266,7 +355,7 @@ export async function registerRoutes(
 
   // ---- AI PARSE ----
 
-  app.post("/api/parse", parseRateLimit, async (req, res) => {
+  app.post("/api/parse", requireAuth, parseRateLimit, async (req, res) => {
     try {
       const { text, existingTaskIds } = req.body;
       if (!text || typeof text !== "string") {
@@ -276,7 +365,9 @@ export async function registerRoutes(
       const today = format(new Date(), "dd/MM/yy");
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
+        // gpt-4.1-nano: 0,10/0,40 USD por 1M tokens vs 0,15/0,60 de
+        // gpt-4o-mini. Un tercio mas barato para la misma tarea de parseo.
+        model: "gpt-4.1-nano",
         response_format: { type: "json_object" },
         messages: [
           {
