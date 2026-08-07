@@ -385,9 +385,12 @@ export async function registerRoutes(
       const personNames = activeUsers.map((u) => u.displayName).join(", ") || "a definir";
 
       const response = await openai.chat.completions.create({
-        // gpt-4.1-nano: 0,10/0,40 USD por 1M tokens vs 0,15/0,60 de
-        // gpt-4o-mini. Un tercio mas barato para la misma tarea de parseo.
-        model: "gpt-4.1-nano",
+        // Se probo gpt-4.1-nano (un tercio mas barato) y NO sirve para esto:
+        // no sigue de forma consistente las reglas condicionales de cuando
+        // separar en varias tareas y cuando no — partia una sola idea en 2 o
+        // 3 tareas sueltas. El ahorro era de centavos al mes; la diferencia
+        // de calidad, notoria. Volver a nano solo si se rehace el prompt.
+        model: "gpt-4o-mini",
         response_format: { type: "json_object" },
         messages: [
           {
@@ -416,16 +419,27 @@ FORMATO de fecha: dd/mm/yy (ej: 15/03/26)
 PERSONAS conocidas: ${personNames} (si no se menciona persona, usar "a definir")
 
 REGLAS IMPORTANTES:
-1. Si el usuario dice algo con "y" como conector dentro de UNA misma tarea, NO lo separes en dos. Ejemplo: "comprar pan y leche" es UNA sola tarea.
-2. Solo separá en múltiples tareas si claramente son cosas distintas e independientes. Ejemplo: "comprar pan. llamar al doctor" son DOS tareas.
-3. Si dice "punto" o hay una pausa clara entre ideas distintas, ahí sí separá.
-4. El texto puede tener errores de dictado por voz, interpretá la intención.
-5. Si menciona "urgente", "ya", "ahora", "prioridad", "asap" → marcar urgent: true
-6. Limpiar el texto de la tarea: no incluir palabras como "agregar tarea", "anotar", etc. Solo la descripción de lo que hay que hacer.
-7. Las fechas relativas como "mañana", "el lunes", "la semana que viene" deben convertirse al formato dd/mm/yy.
-8. CRÍTICO — "update", "complete" y "delete" SOLO se pueden usar si podés indicar el "id" EXACTO de una tarea de la lista de IDs existentes. Si el usuario menciona una tarea por su texto pero NO sabés su id, NO uses "update": usá "create". Es preferible crear una tarea de más (que el usuario puede borrar) a descartar en silencio lo que pidió.
-9. Ante la duda entre crear o modificar, SIEMPRE elegí "create".
-10. Toda acción "update"/"complete"/"delete" DEBE incluir el campo "id" con un número de la lista de IDs existentes. Sin id, esa acción se descarta.
+1. POR DEFECTO TODO EL TEXTO ES **UNA SOLA TAREA**. Esta es la regla más importante de todas. Es mucho peor partir de más que de menos: si el usuario recibe 4 tareas sueltas cuando dictó una sola idea, tiene que borrarlas a mano una por una.
+2. SOLO podés devolver más de una tarea si hay una señal EXPLÍCITA de separación en el texto. Las señales válidas son ÚNICAMENTE estas:
+   (a) un PUNTO seguido de otra idea que tiene su propio verbo. Esta señal manda sobre la regla 1: si hay punto, SEPARÁ.
+       "comprar pan. llamar al doctor" = DOS tareas ("comprar pan" / "llamar al doctor")
+       "revisar las expensas. hablar con Marcos" = DOS tareas
+   (b) que diga literalmente "punto", "nueva tarea", "otra tarea", "aparte", "por otro lado"
+   (c) una numeración o viñetas ("1. ... 2. ...")
+   (d) un salto de línea entre ideas
+   Si NO hay ninguna de esas cuatro señales, devolvé UNA sola tarea con todo el texto.
+3. Los conectores NO separan tareas. "y", "también", "además", "más", las comas y las enumeraciones son parte de LA MISMA tarea. Ejemplos que son UNA sola tarea:
+   - "comprar pan y leche"
+   - "poner en urgente lo de Martina y lo que falta de las expensas"
+   - "revisar el informe, corregirlo y mandarlo"
+4. Ante la MÍNIMA duda sobre si son una o varias: devolvé UNA SOLA.
+5. El texto puede tener errores de dictado por voz, interpretá la intención.
+6. Si menciona "urgente", "ya", "ahora", "prioridad", "asap" → marcar urgent: true
+7. Limpiar el texto de la tarea: no incluir palabras como "agregar tarea", "anotar", etc. Solo la descripción de lo que hay que hacer. Pero NO resumas ni recortes el contenido: si la tarea tiene varias partes, conservalas todas en el texto.
+8. Las fechas relativas como "mañana", "el lunes", "la semana que viene" deben convertirse al formato dd/mm/yy.
+9. CRÍTICO — "update", "complete" y "delete" SOLO se pueden usar si podés indicar el "id" EXACTO de una tarea de la lista de IDs existentes. Si el usuario menciona una tarea por su texto pero NO sabés su id, NO uses "update": usá "create". Es preferible crear una tarea de más (que el usuario puede borrar) a descartar en silencio lo que pidió.
+10. Ante la duda entre crear o modificar, SIEMPRE elegí "create".
+11. Toda acción "update"/"complete"/"delete" DEBE incluir el campo "id" con un número de la lista de IDs existentes. Sin id, esa acción se descarta.
 
 IDs de tareas existentes: ${JSON.stringify(existingTaskIds || [])}
 
