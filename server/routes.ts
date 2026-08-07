@@ -379,6 +379,10 @@ export async function registerRoutes(
       }
 
       const today = format(new Date(), "dd/MM/yy");
+      // Lista de personas real, sacada de los usuarios activos. Antes estaba
+      // hardcodeada como "Mariano, Aldana" y quedaba vieja al sumar gente.
+      const activeUsers = (await storage.getUsers()).filter((u) => u.active);
+      const personNames = activeUsers.map((u) => u.displayName).join(", ") || "a definir";
 
       const response = await openai.chat.completions.create({
         // gpt-4.1-nano: 0,10/0,40 USD por 1M tokens vs 0,15/0,60 de
@@ -409,7 +413,7 @@ TIPOS de tarea:
 
 FORMATO de fecha: dd/mm/yy (ej: 15/03/26)
 
-PERSONAS conocidas: Mariano, Aldana (si no se menciona persona, usar "a definir")
+PERSONAS conocidas: ${personNames} (si no se menciona persona, usar "a definir")
 
 REGLAS IMPORTANTES:
 1. Si el usuario dice algo con "y" como conector dentro de UNA misma tarea, NO lo separes en dos. Ejemplo: "comprar pan y leche" es UNA sola tarea.
@@ -419,6 +423,9 @@ REGLAS IMPORTANTES:
 5. Si menciona "urgente", "ya", "ahora", "prioridad", "asap" → marcar urgent: true
 6. Limpiar el texto de la tarea: no incluir palabras como "agregar tarea", "anotar", etc. Solo la descripción de lo que hay que hacer.
 7. Las fechas relativas como "mañana", "el lunes", "la semana que viene" deben convertirse al formato dd/mm/yy.
+8. CRÍTICO — "update", "complete" y "delete" SOLO se pueden usar si podés indicar el "id" EXACTO de una tarea de la lista de IDs existentes. Si el usuario menciona una tarea por su texto pero NO sabés su id, NO uses "update": usá "create". Es preferible crear una tarea de más (que el usuario puede borrar) a descartar en silencio lo que pidió.
+9. Ante la duda entre crear o modificar, SIEMPRE elegí "create".
+10. Toda acción "update"/"complete"/"delete" DEBE incluir el campo "id" con un número de la lista de IDs existentes. Sin id, esa acción se descarta.
 
 IDs de tareas existentes: ${JSON.stringify(existingTaskIds || [])}
 

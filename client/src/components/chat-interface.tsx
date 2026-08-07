@@ -105,6 +105,34 @@ export function ChatInterface() {
       let successCount = 0;
 
       for (const action of actions) {
+        // Red de seguridad: la IA a veces devuelve update/complete/delete sin
+        // el id de la tarea. Antes esas acciones se descartaban EN SILENCIO y
+        // el usuario creia que se habia guardado. Si trae texto, lo tratamos
+        // como alta nueva (es preferible una tarea de mas, que se puede
+        // borrar, a perder lo que el usuario dicto).
+        if (
+          ['update', 'complete', 'delete'].includes(action.action) &&
+          !action.id &&
+          action.text
+        ) {
+          const payload = {
+            text: action.text,
+            date: action.date || 'a definir',
+            person: action.person || 'a definir',
+            type: action.type || 'a_definir',
+            urgent: action.urgent || false,
+            status: 'activa' as const,
+          };
+          dispatch({ type: 'ADD_TASK', payload, source: 'Chat' });
+          addMessage(
+            'system',
+            `No pude identificar una tarea existente, así que la creé nueva: "${payload.text}".`,
+            'info',
+          );
+          successCount++;
+          continue;
+        }
+
         if (action.action === 'create') {
           const payload = {
             text: action.text || 'Nueva tarea',
@@ -122,9 +150,11 @@ export function ChatInterface() {
         } else if (action.action === 'delete' && action.id) {
           dispatch({ type: 'DELETE_TASK', payload: { id: action.id }, source: 'Chat' });
           addMessage('system', `Tarea ${action.id} eliminada.`, 'success');
+          successCount++;
         } else if (action.action === 'complete' && action.id) {
           dispatch({ type: 'COMPLETE_TASK', payload: { id: action.id }, source: 'Chat' });
           addMessage('system', `Tarea ${action.id} completada.`, 'success');
+          successCount++;
         } else if (action.action === 'update' && action.id) {
           const updates: any = {};
           if (action.text) updates.text = action.text;
@@ -134,11 +164,20 @@ export function ChatInterface() {
           if (action.urgent !== undefined) updates.urgent = action.urgent;
           dispatch({ type: 'UPDATE_TASK', payload: { id: action.id, updates }, source: 'Chat' });
           addMessage('system', `Tarea ${action.id} actualizada.`, 'success');
+          successCount++;
         } else if (action.action === 'move_expired') {
           dispatch({ type: 'MOVE_EXPIRED', source: 'Chat' });
           addMessage('system', 'Tareas vencidas movidas a hoy.', 'success');
+          successCount++;
         } else if (action.action === 'export') {
           addMessage('system', 'Usá el botón de descarga arriba para exportar CSV.', 'info');
+        } else {
+          // Nunca descartar algo sin decirlo.
+          addMessage(
+            'system',
+            `No pude aplicar una acción ("${action.action}") — probá redactarlo de otra forma.`,
+            'error',
+          );
         }
       }
 
