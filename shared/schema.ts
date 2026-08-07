@@ -32,6 +32,9 @@ export const tasks = pgTable("tasks", {
   status: text("status").notNull().default("activa"), // activa | completada | eliminada
   starred: boolean("starred").notNull().default(false),
   priority: text("priority").default("normal"), // baja | normal | alta
+  // Ambos opcionales, texto libre. No se validan contra ningun enum.
+  intention: text("intention"),
+  nextStep: text("next_step"),
   // `person` es texto libre historico y sirve de display. La autoridad para
   // permisos es assignedUserId — nunca filtrar permisos por `person`.
   assignedUserId: integer("assigned_user_id"),
@@ -78,6 +81,8 @@ export const insertTaskSchema = createInsertSchema(tasks).omit({
   person: z.string().optional().default("a definir"),
   priority: z.enum(['baja', 'normal', 'alta']).optional().default('normal'),
   starred: z.boolean().optional().default(false),
+  intention: z.string().max(1000).optional(),
+  nextStep: z.string().max(1000).optional(),
 });
 
 export const updateTaskSchema = createInsertSchema(tasks).omit({
@@ -88,6 +93,8 @@ export const updateTaskSchema = createInsertSchema(tasks).omit({
   text: z.string().min(1).max(500).optional(),
   priority: z.enum(['baja', 'normal', 'alta']).optional(),
   starred: z.boolean().optional(),
+  intention: z.string().max(1000).optional(),
+  nextStep: z.string().max(1000).optional(),
 });
 
 export const insertLogSchema = createInsertSchema(logs).omit({

@@ -128,6 +128,8 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate, onDuplicate }: 
   };
 
   const [isEditingText, setIsEditingText] = useState(false);
+  const [isEditingIntention, setIsEditingIntention] = useState(false);
+  const [isEditingNextStep, setIsEditingNextStep] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const currentColumn = getColumnForTask(task);
   const overdue = isOverdue(task.date);
@@ -336,6 +338,83 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate, onDuplicate }: 
               >
                 {task.text}
                 <Pencil className="inline-block w-3 h-3 ml-1.5 text-muted-foreground/30 opacity-0 group-hover/text:opacity-100 transition-opacity align-text-bottom" />
+              </p>
+            )}
+          </div>
+
+          {/* Intencion / proximo paso — ambos opcionales */}
+          <div className="mb-2 space-y-1">
+            {isEditingIntention ? (
+              <input
+                className="w-full bg-transparent border-b border-dashed border-muted-foreground font-sans text-xs focus:outline-none"
+                defaultValue={task.intention || ''}
+                placeholder="Intencion..."
+                autoFocus
+                data-testid={`input-intention-${task.id}`}
+                onClick={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
+                onBlur={(e) => {
+                  setIsEditingIntention(false);
+                  const value = e.target.value.trim();
+                  if (value !== (task.intention || '')) {
+                    onUpdate(task.id, { intention: value });
+                  }
+                }}
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  if (e.key === 'Enter') e.currentTarget.blur();
+                  if (e.key === 'Escape') setIsEditingIntention(false);
+                }}
+              />
+            ) : (
+              <p
+                className={cn(
+                  "font-sans text-xs leading-snug cursor-text group/intention",
+                  task.intention ? "text-muted-foreground" : "text-muted-foreground/40 italic opacity-0 group-hover:opacity-100 transition-opacity"
+                )}
+                onClick={(e) => { e.stopPropagation(); setIsEditingIntention(true); }}
+                onPointerDown={(e) => e.stopPropagation()}
+                data-testid={`text-intention-${task.id}`}
+              >
+                {task.intention || '+ agregar intención'}
+                <Pencil className="inline-block w-3 h-3 ml-1.5 text-muted-foreground/30 opacity-0 group-hover/intention:opacity-100 transition-opacity align-text-bottom" />
+              </p>
+            )}
+
+            {isEditingNextStep ? (
+              <input
+                className="w-full bg-transparent border-b border-dashed border-muted-foreground font-sans text-xs focus:outline-none"
+                defaultValue={task.nextStep || ''}
+                placeholder="Proximo paso..."
+                autoFocus
+                data-testid={`input-next-step-${task.id}`}
+                onClick={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
+                onBlur={(e) => {
+                  setIsEditingNextStep(false);
+                  const value = e.target.value.trim();
+                  if (value !== (task.nextStep || '')) {
+                    onUpdate(task.id, { nextStep: value });
+                  }
+                }}
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  if (e.key === 'Enter') e.currentTarget.blur();
+                  if (e.key === 'Escape') setIsEditingNextStep(false);
+                }}
+              />
+            ) : (
+              <p
+                className={cn(
+                  "font-sans text-xs leading-snug cursor-text group/nextstep",
+                  task.nextStep ? "text-muted-foreground" : "text-muted-foreground/40 italic opacity-0 group-hover:opacity-100 transition-opacity"
+                )}
+                onClick={(e) => { e.stopPropagation(); setIsEditingNextStep(true); }}
+                onPointerDown={(e) => e.stopPropagation()}
+                data-testid={`text-next-step-${task.id}`}
+              >
+                {task.nextStep || '+ agregar próximo paso'}
+                <Pencil className="inline-block w-3 h-3 ml-1.5 text-muted-foreground/30 opacity-0 group-hover/nextstep:opacity-100 transition-opacity align-text-bottom" />
               </p>
             )}
           </div>

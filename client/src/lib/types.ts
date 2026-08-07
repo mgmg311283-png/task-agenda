@@ -22,6 +22,8 @@ export interface Task {
   dueTime?: string; // "HH:mm" format
   starred?: boolean;
   estimatedHours?: number;
+  intention?: string | null;
+  nextStep?: string | null;
   createdAt: string;
   updatedAt: string;
 }
