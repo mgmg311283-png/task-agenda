@@ -10,6 +10,7 @@ import { LogView } from "@/pages/log-view";
 import { MetricsView } from "@/pages/metrics-view";
 import { MyTasks } from "@/pages/my-tasks";
 import { LoginPage } from "@/pages/login";
+import { UsersView } from "@/pages/users-view";
 import NotFound from "@/pages/not-found";
 import { ErrorBoundary } from "@/components/error-boundary";
 
@@ -19,6 +20,7 @@ function AdminRouter() {
       <Route path="/" component={Dashboard} />
       <Route path="/log" component={LogView} />
       <Route path="/metrics" component={MetricsView} />
+      <Route path="/usuarios" component={UsersView} />
       <Route component={NotFound} />
     </Switch>
   );

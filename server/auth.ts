@@ -37,6 +37,42 @@ export function isAuthEnforced(): boolean {
   return AUTH_ENFORCED;
 }
 
+// ── Estado del usuario, con cache corta ──────────────────────────────────
+// Hay que revalidar en CADA request que el usuario siga activo: si solo se
+// chequeara al login, alguien desactivado seguiria entrando con su cookie
+// (que dura 90 dias). La cache de 60s evita un SELECT por request sin que
+// una desactivacion tarde en surtir efecto.
+export interface LiveUser {
+  id: number;
+  role: UserRole;
+  active: boolean;
+}
+
+type UserLoader = (id: number) => Promise<LiveUser | undefined>;
+
+let userLoader: UserLoader | null = null;
+const userCache = new Map<number, { user: LiveUser | undefined; at: number }>();
+const USER_TTL_MS = 60_000;
+
+/** Inyectado desde index.ts para no crear un ciclo auth <-> storage. */
+export function setUserLoader(loader: UserLoader): void {
+  userLoader = loader;
+}
+
+export function invalidateUserCache(id?: number): void {
+  if (id === undefined) userCache.clear();
+  else userCache.delete(id);
+}
+
+async function loadUser(id: number): Promise<LiveUser | undefined> {
+  const hit = userCache.get(id);
+  if (hit && Date.now() - hit.at < USER_TTL_MS) return hit.user;
+  if (!userLoader) return undefined;
+  const user = await userLoader(id);
+  userCache.set(id, { user, at: Date.now() });
+  return user;
+}
+
 export function getScope(req: Request): Scope {
   if (req.session?.userId) {
     return {
@@ -49,20 +85,39 @@ export function getScope(req: Request): Scope {
   return { userId: LEGACY_ADMIN_ID, role: "admin", teamIds: [] };
 }
 
-export function requireAuth(req: Request, res: Response, next: NextFunction) {
-  if (req.session?.userId) return next();
+export async function requireAuth(req: Request, res: Response, next: NextFunction) {
+  if (req.session?.userId) {
+    const user = await loadUser(req.session.userId);
+    if (!user || !user.active) {
+      return req.session.destroy(() =>
+        res.status(401).json({ message: "No autenticado" }),
+      );
+    }
+    // El rol pudo cambiar despues de que se creo la sesion.
+    if (user.role !== req.session.role) {
+      req.session.role = user.role;
+    }
+    return next();
+  }
   if (!AUTH_ENFORCED) return next();
   return res.status(401).json({ message: "No autenticado" });
 }
 
-export function requireAdmin(req: Request, res: Response, next: NextFunction) {
+export async function requireAdmin(req: Request, res: Response, next: NextFunction) {
   if (!AUTH_ENFORCED && !req.session?.userId) return next();
   if (!req.session?.userId) {
     return res.status(401).json({ message: "No autenticado" });
   }
-  if (req.session.role !== "admin") {
+  const user = await loadUser(req.session.userId);
+  if (!user || !user.active) {
+    return req.session.destroy(() =>
+      res.status(401).json({ message: "No autenticado" }),
+    );
+  }
+  if (user.role !== "admin") {
     return res.status(403).json({ message: "Requiere permisos de administrador" });
   }
+  req.session.role = user.role;
   next();
 }
 

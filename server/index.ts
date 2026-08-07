@@ -5,7 +5,9 @@ import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import { registerRoutes } from "./routes";
 import { registerAuthRoutes, seedAdmin } from "./auth-routes";
-import { pool } from "./storage";
+import { registerUserRoutes } from "./user-routes";
+import { setUserLoader } from "./auth";
+import { pool, storage } from "./storage";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 
@@ -125,7 +127,15 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Inyectado para que auth.ts pueda revalidar el usuario sin importar
+  // storage (evita el ciclo auth <-> storage).
+  setUserLoader(async (id) => {
+    const u = await storage.getUserById(id);
+    return u ? { id: u.id, role: u.role as any, active: u.active } : undefined;
+  });
+
   registerAuthRoutes(app);
+  registerUserRoutes(app);
   await registerRoutes(httpServer, app);
   await seedAdmin();
 
