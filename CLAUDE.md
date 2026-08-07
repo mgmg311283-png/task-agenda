@@ -41,7 +41,7 @@ The `start` script automatically runs `drizzle-kit push` before launching, ensur
 ### Data model (`shared/schema.ts`)
 
 Two tables:
-- **tasks** — `id`, `text`, `date` (`"dd/MM/yy"` or `"a definir"`), `person`, `type` (`accion | para_pensar | a_definir`), `urgent` (boolean), `status` (`activa | completada | eliminada`), `starred` (boolean), `priority` (`baja | normal | alta`), `createdAt`, `updatedAt`. Deletions and completions are soft — they update `status`.
+- **tasks** — `id`, `text`, `date` (`"dd/MM/yy"` or `"a definir"`), `person`, `type` (`accion | para_pensar | a_definir`), `urgent` (boolean), `status` (`activa | completada | eliminada`), `starred` (boolean), `priority` (`baja | normal | alta`), `intention` (optional free text), `nextStep` (optional free text), `createdAt`, `updatedAt`. Deletions and completions are soft — they update `status`.
 - **logs** — Full audit trail. Every mutation writes a log entry with `source` (`UI | Chat | Audio | Import`), `action`, `details`, `originalValues`, and `newValues` as JSON strings.
 
 ### Routing
