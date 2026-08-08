@@ -8,13 +8,16 @@ import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { Dashboard } from "@/pages/dashboard";
 import { LogView } from "@/pages/log-view";
 import { MetricsView } from "@/pages/metrics-view";
-import { MyTasks } from "@/pages/my-tasks";
 import { LoginPage } from "@/pages/login";
 import { UsersView } from "@/pages/users-view";
 import NotFound from "@/pages/not-found";
 import { ErrorBoundary } from "@/components/error-boundary";
 
-function AdminRouter() {
+// Un solo tablero para todos los roles: el servidor ya filtra que cada uno
+// vea solo lo suyo (o lo de su equipo, si es supervisor), así que no hace
+// falta una UI distinta — TopBar oculta las acciones de administrador
+// (import, borrado masivo, usuarios) para quien no sea admin.
+function Router() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
@@ -22,16 +25,6 @@ function AdminRouter() {
       <Route path="/metrics" component={MetricsView} />
       <Route path="/usuarios" component={UsersView} />
       <Route component={NotFound} />
-    </Switch>
-  );
-}
-
-function OperarioRouter() {
-  // Vista simplificada: sin kanban, sin metricas, sin import/export.
-  return (
-    <Switch>
-      <Route path="/" component={MyTasks} />
-      <Route component={MyTasks} />
     </Switch>
   );
 }
@@ -55,7 +48,7 @@ function AuthGate() {
   return (
     <TaskProvider>
       <ErrorBoundary>
-        {user.role === "admin" ? <AdminRouter /> : <OperarioRouter />}
+        <Router />
       </ErrorBoundary>
       <Toaster />
     </TaskProvider>

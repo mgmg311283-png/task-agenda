@@ -146,7 +146,12 @@ export function TaskProvider({ children }: { children: ReactNode }) {
 
   const deleteAllMutation = useMutation({
     mutationFn: async (data: { source: string }): Promise<{ deleted: number; ids: number[] }> => {
-      const res = await apiRequest('POST', '/api/tasks/delete-all', { source: data.source });
+      // El servidor exige esta confirmación explícita en el body (además del
+      // confirm() del navegador que ya se hizo antes de despachar la acción).
+      const res = await apiRequest('POST', '/api/tasks/delete-all', {
+        source: data.source,
+        confirm: 'ELIMINAR TODO',
+      });
       return res.json();
     },
     onSuccess: (result) => {

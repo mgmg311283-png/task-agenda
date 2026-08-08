@@ -3,11 +3,14 @@ import { CSS } from '@dnd-kit/utilities';
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Check, Trash2, ArrowRightLeft, Pencil, CalendarIcon, ChevronRight, GripVertical, Copy, Zap, AlertCircle, TrendingUp, Star } from "lucide-react";
+import { Check, Trash2, ArrowRightLeft, Pencil, CalendarIcon, ChevronRight, GripVertical, Copy, Zap, AlertCircle, TrendingUp, Star, History } from "lucide-react";
+import { TaskHistoryDialog } from "@/components/task-history-dialog";
 import { Task } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useState } from 'react';
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/auth-context";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -90,7 +93,11 @@ const MOVE_OPTIONS = [
   { id: 'think', label: 'PENSAR', icon: '🟡', updates: { urgent: false, type: 'para_pensar' as const } },
 ];
 
-const PERSONAS = ['mariano', 'aldana', 'Alejandro', 'Enzo', 'penso', 'Daniel', 'Carla', 'Cebrero', 'Marcos', 'Gonzalo'];
+interface AppUser {
+  id: number;
+  displayName: string;
+  active: boolean;
+}
 
 function isOverdue(dateStr: string): boolean {
   if (!dateStr || dateStr === 'a definir') return false;
@@ -131,6 +138,16 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate, onDuplicate }: 
   const [isEditingIntention, setIsEditingIntention] = useState(false);
   const [isEditingNextStep, setIsEditingNextStep] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+  // Solo el admin puede reasignar tareas, y GET /api/users es admin-only en
+  // el servidor — no tiene sentido dispararla para el resto.
+  const { data: assignableUsers = [] } = useQuery<AppUser[]>({
+    queryKey: ["/api/users"],
+    enabled: isAdmin,
+    staleTime: 60_000,
+  });
   const currentColumn = getColumnForTask(task);
   const overdue = isOverdue(task.date);
   const isTaskToday = isToday(task.date);
@@ -422,47 +439,61 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate, onDuplicate }: 
           {/* Footer */}
           <div className="flex items-center gap-2 mt-2 text-xs flex-wrap">
 
-            {/* Person dropdown */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Badge
-                  variant="outline"
-                  className="rounded-none border-border text-muted-foreground font-normal px-1.5 h-5 cursor-pointer hover:border-foreground hover:text-foreground transition-colors"
-                  onClick={(e) => e.stopPropagation()}
-                  onPointerDown={(e) => e.stopPropagation()}
-                  data-testid={`badge-person-${task.id}`}
-                >
-                  {task.person || 'sin asignar'}
-                </Badge>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="start"
-                className="min-w-[140px]"
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <DropdownMenuItem
-                  onClick={() => onUpdate(task.id, { person: 'a definir' })}
-                  className="font-mono text-xs cursor-pointer text-muted-foreground italic"
-                  data-testid={`person-none-${task.id}`}
-                >
-                  sin asignar
-                </DropdownMenuItem>
-                {PERSONAS.map((persona) => (
-                  <DropdownMenuItem
-                    key={persona}
-                    onClick={() => onUpdate(task.id, { person: persona })}
-                    className={cn(
-                      "font-mono text-xs cursor-pointer",
-                      task.person === persona && "font-bold"
-                    )}
-                    data-testid={`person-${persona}-${task.id}`}
+            {/* Persona asignada. Solo el admin puede reasignar (el server
+                también lo exige): para el resto es de solo lectura, porque
+                antes esto era un campo de texto libre sin relación con los
+                permisos reales — cambiarlo daba la falsa sensación de haber
+                reasignado la tarea sin tocar quién puede verla de verdad. */}
+            {isAdmin ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Badge
+                    variant="outline"
+                    className="rounded-none border-border text-muted-foreground font-normal px-1.5 h-5 cursor-pointer hover:border-foreground hover:text-foreground transition-colors"
+                    onClick={(e) => e.stopPropagation()}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    data-testid={`badge-person-${task.id}`}
                   >
-                    {persona}
+                    {task.person || 'sin asignar'}
+                  </Badge>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="start"
+                  className="min-w-[160px]"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <DropdownMenuItem
+                    onClick={() => onUpdate(task.id, { assignedUserId: null, person: 'a definir' })}
+                    className="font-mono text-xs cursor-pointer text-muted-foreground italic"
+                    data-testid={`person-none-${task.id}`}
+                  >
+                    sin asignar
                   </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  {assignableUsers.filter((u) => u.active).map((u) => (
+                    <DropdownMenuItem
+                      key={u.id}
+                      onClick={() => onUpdate(task.id, { assignedUserId: u.id, person: u.displayName })}
+                      className={cn(
+                        "font-mono text-xs cursor-pointer",
+                        task.assignedUserId === u.id && "font-bold"
+                      )}
+                      data-testid={`person-${u.id}-${task.id}`}
+                    >
+                      {u.displayName}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <Badge
+                variant="outline"
+                className="rounded-none border-border text-muted-foreground font-normal px-1.5 h-5"
+                data-testid={`badge-person-${task.id}`}
+              >
+                {task.person || 'sin asignar'}
+              </Badge>
+            )}
 
             {/* Date picker */}
             <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
@@ -564,10 +595,27 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate, onDuplicate }: 
               <span>30d</span>
             </button>
 
+            {/* Historial */}
+            <button
+              className="font-mono text-xs text-muted-foreground hover:text-foreground hover:bg-muted p-1 rounded-none transition-colors flex items-center"
+              onClick={(e) => {
+                e.stopPropagation();
+                setHistoryOpen(true);
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              title="Ver historial"
+              data-testid={`btn-history-${task.id}`}
+            >
+              <History className="w-3 h-3" />
+            </button>
+
           </div>
 
         </CardContent>
       </Card>
+      {historyOpen && (
+        <TaskHistoryDialog taskId={task.id} onClose={() => setHistoryOpen(false)} />
+      )}
     </div>
   );
 }

@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Download, Upload, Trash, CalendarClock, History, BarChart3, Moon, Sun, AlertTriangle, RotateCcw, RotateCw, Plus, Settings, Zap, Wifi, Presentation, Focus } from "lucide-react";
+import { Download, Upload, Trash, CalendarClock, History, BarChart3, Moon, Sun, AlertTriangle, RotateCcw, RotateCw, Plus, Settings, Zap, Wifi, Presentation, Focus, Users, LogOut } from "lucide-react";
 import { useTasks } from "@/lib/task-context";
+import { useAuth } from "@/lib/auth-context";
 import { Link, useLocation } from "wouter";
 import Papa from 'papaparse';
 import { toast } from "@/hooks/use-toast";
@@ -23,6 +24,8 @@ import { format } from "date-fns";
 
 export function TopBar() {
   const { state, dispatch, moveExpiredAsync, moveUrgentToActionAsync, undo, redo, canUndo, canRedo } = useTasks();
+  const { user, logout } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [csvContent, setCsvContent] = useState("");
   const [isImportOpen, setIsImportOpen] = useState(false);
   const { theme, setTheme } = useTheme();
@@ -148,6 +151,9 @@ export function TopBar() {
     { href: '/', label: 'TABLERO' },
     { href: '/log', label: 'HISTORIAL', icon: <History className="w-3 h-3" /> },
     { href: '/metrics', label: 'REPORTES', icon: <BarChart3 className="w-3 h-3" /> },
+    // Solo el admin gestiona usuarios; la ruta también está protegida en el
+    // servidor (403 para el resto), esto es solo para no mostrar un link roto.
+    ...(isAdmin ? [{ href: '/usuarios', label: 'USUARIOS', icon: <Users className="w-3 h-3" /> }] : []),
   ];
 
   return (
@@ -317,6 +323,9 @@ export function TopBar() {
             <Download className="w-4 h-4" />
           </Button>
 
+          {/* Import masivo: solo admin (el servidor la rechaza para el resto,
+              esto evita mostrar un botón que siempre va a fallar). */}
+          {isAdmin && (
           <Dialog open={isImportOpen} onOpenChange={setIsImportOpen}>
             <DialogTrigger asChild>
               <Button variant="ghost" size="icon" className="h-8 w-8" title="Importar (Pegar CSV)">
@@ -352,6 +361,7 @@ export function TopBar() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          )}
 
           <Button
             variant="ghost"
@@ -383,6 +393,10 @@ export function TopBar() {
             {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </Button>
 
+          {/* Borrado masivo: solo admin (el servidor lo rechaza para el
+              resto). Para un operario/supervisor esto borraría potencialmente
+              tareas de otros equipos si no se restringiera). */}
+          {isAdmin && (
           <Button
             variant="ghost"
             size="icon"
@@ -395,6 +409,23 @@ export function TopBar() {
             }}
           >
             <Trash className="w-4 h-4" />
+          </Button>
+          )}
+
+          <div className="h-4 w-px bg-border mx-1 hidden sm:block" />
+
+          <span className="text-xs text-muted-foreground hidden sm:inline" data-testid="text-current-user">
+            {user?.displayName}
+          </span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            title="Salir"
+            onClick={logout}
+            data-testid="button-logout"
+          >
+            <LogOut className="w-4 h-4" />
           </Button>
         </div>
       </div>

@@ -13,7 +13,11 @@ export interface Task {
   id: number;
   text: string;
   date: string; // "dd/mm/yy" or "a definir"
+  // Texto libre historico/display. La autoridad real de permisos es
+  // assignedUserId — nunca usar `person` para decidir quien puede ver o
+  // tocar la tarea.
   person: string;
+  assignedUserId?: number | null;
   type: TaskType;
   urgent: boolean;
   status: TaskStatus;

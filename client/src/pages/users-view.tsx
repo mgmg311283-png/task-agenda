@@ -28,9 +28,25 @@ const ROLE_LABEL: Record<string, string> = {
 export function UsersView() {
   const qc = useQueryClient();
   const { toast } = useToast();
-  const { data: users = [], isLoading } = useQuery<AppUser[]>({
+  const { data: users = [], isLoading, error } = useQuery<AppUser[]>({
     queryKey: ["/api/users"],
+    retry: false,
   });
+
+  // Ruta protegida en el servidor (403 para quien no sea admin); esto solo
+  // evita mostrar una pantalla en blanco si alguien la abre por URL directa.
+  if (error) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 px-4">
+        <p className="text-sm text-muted-foreground">No tenés permiso para ver esta página.</p>
+        <Link href="/">
+          <Button variant="outline" size="sm" className="gap-1">
+            <ArrowLeft className="w-4 h-4" /> Volver
+          </Button>
+        </Link>
+      </div>
+    );
+  }
 
   const [showNew, setShowNew] = useState(false);
   const [form, setForm] = useState({
