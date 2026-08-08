@@ -235,6 +235,28 @@ export function UsersView() {
                 <option value="admin">Administrador</option>
               </select>
 
+              {/* Solo aplica a operarios — mismo criterio que en el alta.
+                  El servidor ya aceptaba supervisorId en el PATCH, faltaba
+                  este control para poder cambiarlo despues de creado. */}
+              {u.role === "operario" && (
+                <select
+                  className="h-9 px-2 rounded-md border border-input bg-background text-xs"
+                  value={u.supervisorId ?? ""}
+                  onChange={(e) =>
+                    patchUser.mutate({
+                      id: u.id,
+                      body: { supervisorId: e.target.value ? Number(e.target.value) : null },
+                    })
+                  }
+                  data-testid={`select-supervisor-${u.id}`}
+                >
+                  <option value="">— sin supervisor —</option>
+                  {supervisors.map((s) => (
+                    <option key={s.id} value={s.id}>{s.displayName}</option>
+                  ))}
+                </select>
+              )}
+
               <Button
                 size="sm"
                 variant="outline"
