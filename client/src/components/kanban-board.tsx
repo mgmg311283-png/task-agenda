@@ -77,34 +77,52 @@ export function KanbanBoard() {
   const [showCompleted, setShowCompleted] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   // "Mías" = tareas que YO escribi (createdByUserId), esten o no
-  // asignadas — por defecto asi, para no ahogarse en tareas de otros
-  // cuando el equipo crece. Pensado para admin/supervisor; un operario ya
-  // solo ve lo suyo desde el servidor.
-  const [creatorFilter, setCreatorFilter] = useState<'all' | 'mine'>('mine');
+  // asignadas. El default por rol se decide en el effect de abajo (depende
+  // de `user`, que todavia no esta disponible en este primer render) —
+  // 'all' ac es solo el placeholder seguro mientras tanto, para no
+  // arrancar mostrandole de menos a nadie.
+  const [creatorFilter, setCreatorFilter] = useState<'all' | 'mine'>('all');
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor)
   );
 
-  // Persist view preferences to localStorage
+  // Persist view preferences to localStorage. creatorFilter NO va aca a
+  // proposito: este effect corre en el primer render con el valor
+  // placeholder, antes de saber el rol, y pisaria localStorage con un
+  // valor que el usuario nunca eligio. Se guarda solo al clickear (ver los
+  // botones Mías/Todas mas abajo).
   useEffect(() => {
     localStorage.setItem('kanban-view-mode', viewMode);
     localStorage.setItem('kanban-show-completed', String(showCompleted));
-    localStorage.setItem('kanban-creator-filter', creatorFilter);
-  }, [viewMode, showCompleted, creatorFilter]);
+  }, [viewMode, showCompleted]);
 
   // Load view preferences from localStorage
   useEffect(() => {
     const savedViewMode = localStorage.getItem('kanban-view-mode') as 'grid' | 'list' | null;
     const savedShowCompleted = localStorage.getItem('kanban-show-completed') === 'true';
-    const savedCreatorFilter = localStorage.getItem('kanban-creator-filter') as 'all' | 'mine' | null;
     if (savedViewMode) setViewMode(savedViewMode);
     setShowCompleted(savedShowCompleted);
-    // Sin preferencia guardada todavia, el default ya es 'mine' (declarado
-    // arriba en useState) — no hace falta setearlo de nuevo aca.
-    if (savedCreatorFilter) setCreatorFilter(savedCreatorFilter);
   }, []);
+
+  // Default de "Mías/Todas" por rol — separado del resto porque depende de
+  // `user`, que puede no estar listo en el primer render. El admin escribio
+  // el historial entero y hoy se ahoga con lo de todos: arranca en "Mías".
+  // Supervisor y operario ya ven una porcion acotada (su equipo / lo suyo)
+  // filtrada por el servidor — filtrar de nuevo por creador de encima solo
+  // les esconde tareas que otro les escribio y asigno. El operario ni
+  // siquiera tiene el control visible (mas abajo), asi que para el este
+  // valor tiene que ser 'all' siempre, no solo por default.
+  useEffect(() => {
+    if (!user) return;
+    if (user.role === 'operario') {
+      setCreatorFilter('all');
+      return;
+    }
+    const saved = localStorage.getItem('kanban-creator-filter') as 'all' | 'mine' | null;
+    setCreatorFilter(saved ?? (user.role === 'admin' ? 'mine' : 'all'));
+  }, [user]);
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as number);
@@ -273,7 +291,10 @@ export function KanbanBoard() {
               ] as const).map(opt => (
                 <button
                   key={opt.value}
-                  onClick={() => setCreatorFilter(opt.value)}
+                  onClick={() => {
+                    setCreatorFilter(opt.value);
+                    localStorage.setItem('kanban-creator-filter', opt.value);
+                  }}
                   className={cn(
                     "text-xs font-mono px-1.5 py-0.5 border rounded transition-colors",
                     creatorFilter === opt.value
