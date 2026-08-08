@@ -22,18 +22,17 @@ function parseDateToSortKey(dateStr: string): number {
     return year * 10000 + month * 100 + day;
 }
 
-function getSortedTasks(tasks: Task[], columnId: string, personFilter: string, searchQuery: string = '', priorityFilter: string = '', starredFilter: boolean = false, assigneeFilter: 'all' | 'mine' | 'others' = 'all', currentUserId?: number | null): Task[] {
+function getSortedTasks(tasks: Task[], columnId: string, personFilter: string, searchQuery: string = '', priorityFilter: string = '', starredFilter: boolean = false, creatorFilter: 'all' | 'mine' = 'mine', currentUserId?: number | null): Task[] {
     const colTasks = tasks.filter(t => {
         if (t.status !== 'activa') return false;
         if (personFilter && t.person.toLowerCase() !== personFilter.toLowerCase()) return false;
         if (searchQuery && !t.text.toLowerCase().includes(searchQuery.toLowerCase())) return false;
         if (priorityFilter && t.priority !== priorityFilter) return false;
         if (starredFilter && !t.starred) return false;
-        // Comparamos contra assignedUserId, no contra `person` (texto libre,
-        // puede quedar desactualizado respecto a quien tiene la tarea de
-        // verdad — ver el comentario en types.ts).
-        if (assigneeFilter === 'mine' && t.assignedUserId !== currentUserId) return false;
-        if (assigneeFilter === 'others' && (t.assignedUserId == null || t.assignedUserId === currentUserId)) return false;
+        // "Mías" = las que YO escribi (createdByUserId), esten o no
+        // asignadas a otra persona — no confundir con assignedUserId
+        // (a quien se le asigno el trabajo) ni con `person` (texto libre).
+        if (creatorFilter === 'mine' && t.createdByUserId !== currentUserId) return false;
         if (columnId === 'urgent') return t.urgent;
         if (columnId === 'action') return !t.urgent && (t.type === 'accion' || t.type === 'a_definir');
         if (columnId === 'think') return !t.urgent && t.type === 'para_pensar';
@@ -77,10 +76,11 @@ export function KanbanBoard() {
   const [starredFilter, setStarredFilter] = useState<boolean>(false);
   const [showCompleted, setShowCompleted] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  // "Mías" muestra solo lo que tengo asignado; "Otros" solo lo asignado a
-  // otra persona. Pensado para admin/supervisor, que reciben tareas de
-  // varios usuarios — un operario ya solo ve lo suyo desde el servidor.
-  const [assigneeFilter, setAssigneeFilter] = useState<'all' | 'mine' | 'others'>('all');
+  // "Mías" = tareas que YO escribi (createdByUserId), esten o no
+  // asignadas — por defecto asi, para no ahogarse en tareas de otros
+  // cuando el equipo crece. Pensado para admin/supervisor; un operario ya
+  // solo ve lo suyo desde el servidor.
+  const [creatorFilter, setCreatorFilter] = useState<'all' | 'mine'>('mine');
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -91,17 +91,19 @@ export function KanbanBoard() {
   useEffect(() => {
     localStorage.setItem('kanban-view-mode', viewMode);
     localStorage.setItem('kanban-show-completed', String(showCompleted));
-    localStorage.setItem('kanban-assignee-filter', assigneeFilter);
-  }, [viewMode, showCompleted, assigneeFilter]);
+    localStorage.setItem('kanban-creator-filter', creatorFilter);
+  }, [viewMode, showCompleted, creatorFilter]);
 
   // Load view preferences from localStorage
   useEffect(() => {
     const savedViewMode = localStorage.getItem('kanban-view-mode') as 'grid' | 'list' | null;
     const savedShowCompleted = localStorage.getItem('kanban-show-completed') === 'true';
-    const savedAssigneeFilter = localStorage.getItem('kanban-assignee-filter') as 'all' | 'mine' | 'others' | null;
+    const savedCreatorFilter = localStorage.getItem('kanban-creator-filter') as 'all' | 'mine' | null;
     if (savedViewMode) setViewMode(savedViewMode);
     setShowCompleted(savedShowCompleted);
-    if (savedAssigneeFilter) setAssigneeFilter(savedAssigneeFilter);
+    // Sin preferencia guardada todavia, el default ya es 'mine' (declarado
+    // arriba en useState) — no hace falta setearlo de nuevo aca.
+    if (savedCreatorFilter) setCreatorFilter(savedCreatorFilter);
   }, []);
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -171,7 +173,7 @@ export function KanbanBoard() {
     : state.tasks;
 
   const columnCounts = COLUMNS.reduce((acc, col) => {
-    acc[col.id] = getSortedTasks(state.tasks, col.id, personFilter, searchQuery, priorityFilter, starredFilter, assigneeFilter, user?.id).length;
+    acc[col.id] = getSortedTasks(state.tasks, col.id, personFilter, searchQuery, priorityFilter, starredFilter, creatorFilter, user?.id).length;
     return acc;
   }, {} as Record<string, number>);
 
@@ -258,23 +260,23 @@ export function KanbanBoard() {
             <Star className={cn("h-3.5 w-3.5", starredFilter && "fill-current")} />
           </Button>
 
-          {/* Filtro por asignado — solo tiene sentido si el usuario puede ver
-              tareas de otros (admin ve todo, supervisor ve su equipo). Un
+          {/* Mías = tareas que YO escribi, esten o no asignadas a otra
+              persona. Solo tiene sentido si el usuario puede recibir
+              tareas de otros (admin ve todo, supervisor ve su equipo); un
               operario ya solo recibe lo suyo del servidor. */}
           {user && user.role !== 'operario' && (
             <>
               <span className="text-[10px] font-mono text-muted-foreground uppercase">Ver:</span>
               {([
-                { value: 'all', label: 'Todas' },
                 { value: 'mine', label: 'Mías' },
-                { value: 'others', label: 'De otros' },
+                { value: 'all', label: 'Todas' },
               ] as const).map(opt => (
                 <button
                   key={opt.value}
-                  onClick={() => setAssigneeFilter(opt.value)}
+                  onClick={() => setCreatorFilter(opt.value)}
                   className={cn(
                     "text-xs font-mono px-1.5 py-0.5 border rounded transition-colors",
-                    assigneeFilter === opt.value
+                    creatorFilter === opt.value
                       ? "bg-foreground text-background border-foreground"
                       : "bg-background text-muted-foreground border-border hover:border-foreground"
                   )}
@@ -374,7 +376,7 @@ export function KanbanBoard() {
             key={col.id}
             id={col.id}
             title={col.title}
-            tasks={getSortedTasks(state.tasks, col.id, personFilter, searchQuery, priorityFilter, starredFilter, assigneeFilter, user?.id)}
+            tasks={getSortedTasks(state.tasks, col.id, personFilter, searchQuery, priorityFilter, starredFilter, creatorFilter, user?.id)}
             color={col.color as any}
             isLoading={state.isLoading}
             onComplete={onComplete}
@@ -392,7 +394,7 @@ export function KanbanBoard() {
             key={col.id}
             id={col.id}
             title={col.title}
-            tasks={getSortedTasks(state.tasks, col.id, personFilter, searchQuery, priorityFilter, starredFilter, assigneeFilter, user?.id)}
+            tasks={getSortedTasks(state.tasks, col.id, personFilter, searchQuery, priorityFilter, starredFilter, creatorFilter, user?.id)}
             color={col.color as any}
             isLoading={state.isLoading}
             onComplete={onComplete}

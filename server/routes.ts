@@ -320,6 +320,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: "No tasks provided" });
       }
 
+      const scope = getScope(req);
       const validTasks = tasksData.map((t: any) => ({
         text: t.text || "Sin título",
         date: t.date || "a definir",
@@ -329,10 +330,12 @@ export async function registerRoutes(
         starred: t.starred || false,
         priority: t.priority || "normal",
         status: "activa",
+        // Antes no se grababa: las tareas importadas por CSV quedaban sin
+        // creador, invisibles en el filtro "Mías" de quien las importó.
+        createdByUserId: scope.userId,
       }));
 
       const created = await storage.importTasks(validTasks);
-      const scope = getScope(req);
 
       if (created.length > 0) {
         const batchId = randomUUID();

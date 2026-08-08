@@ -18,6 +18,7 @@ export interface Task {
   // tocar la tarea.
   person: string;
   assignedUserId?: number | null;
+  createdByUserId?: number | null;
   type: TaskType;
   urgent: boolean;
   status: TaskStatus;
