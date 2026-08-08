@@ -323,9 +323,11 @@ export function TopBar() {
             <Download className="w-4 h-4" />
           </Button>
 
-          {/* Import masivo: solo admin (el servidor la rechaza para el resto,
-              esto evita mostrar un botón que siempre va a fallar). */}
-          {isAdmin && (
+          {/* Import masivo: disponible para todos los roles logueados. Un
+              no-admin importa solo para si mismo — el servidor fuerza
+              person/assignedUserId a su propio usuario, ignorando lo que
+              venga en la columna PERSONA del CSV (mismo criterio que crear
+              una tarea suelta). */}
           <Dialog open={isImportOpen} onOpenChange={setIsImportOpen}>
             <DialogTrigger asChild>
               <Button variant="ghost" size="icon" className="h-8 w-8" title="Importar (Pegar CSV)">
@@ -361,7 +363,6 @@ export function TopBar() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-          )}
 
           <Button
             variant="ghost"

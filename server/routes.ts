@@ -313,7 +313,13 @@ export async function registerRoutes(
   });
 
   // Import tasks (bulk create) — solo admin: puede setear person arbitrario
-  app.post("/api/tasks/import", requireAdmin, async (req, res) => {
+  // Antes admin-only. Un no-admin puede importar, pero solo para si mismo:
+  // igual que en la creacion de una sola tarea, se ignora el campo person
+  // del CSV y se fuerza su propio nombre + assignedUserId, para no poder
+  // regalarle (ni robarle) tareas a otro por esta via. El admin mantiene
+  // el comportamiento de siempre (persona libre, sin assignedUserId ->
+  // bandeja "sin asignar").
+  app.post("/api/tasks/import", requireAuth, async (req, res) => {
     try {
       const tasksData = req.body.tasks;
       if (!Array.isArray(tasksData) || tasksData.length === 0) {
@@ -321,10 +327,19 @@ export async function registerRoutes(
       }
 
       const scope = getScope(req);
+      let selfAssign: { assignedUserId: number; person: string } | null = null;
+      if (scope.role !== "admin") {
+        const me = await storage.getUserById(scope.userId);
+        selfAssign = {
+          assignedUserId: scope.userId,
+          person: me?.displayName || "a definir",
+        };
+      }
+
       const validTasks = tasksData.map((t: any) => ({
         text: t.text || "Sin título",
         date: t.date || "a definir",
-        person: t.person || "a definir",
+        person: selfAssign ? selfAssign.person : t.person || "a definir",
         type: t.type || "a_definir",
         urgent: t.urgent || false,
         starred: t.starred || false,
@@ -333,6 +348,7 @@ export async function registerRoutes(
         // Antes no se grababa: las tareas importadas por CSV quedaban sin
         // creador, invisibles en el filtro "Mías" de quien las importó.
         createdByUserId: scope.userId,
+        ...(selfAssign ? { assignedUserId: selfAssign.assignedUserId } : {}),
       }));
 
       const created = await storage.importTasks(validTasks);
