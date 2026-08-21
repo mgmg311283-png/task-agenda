@@ -398,10 +398,6 @@ export async function registerRoutes(
       }
 
       const today = format(new Date(), "dd/MM/yy");
-      // Lista de personas real, sacada de los usuarios activos. Antes estaba
-      // hardcodeada como "Mariano, Aldana" y quedaba vieja al sumar gente.
-      const activeUsers = (await storage.getUsers()).filter((u) => u.active);
-      const personNames = activeUsers.map((u) => u.displayName).join(", ") || "a definir";
 
       const response = await openai.chat.completions.create({
         // Se probo gpt-4.1-nano (un tercio mas barato) y NO sirve para esto:
@@ -435,8 +431,6 @@ TIPOS de tarea:
 
 FORMATO de fecha: dd/mm/yy (ej: 15/03/26)
 
-PERSONAS conocidas: ${personNames} (si no se menciona persona, usar "a definir")
-
 REGLAS IMPORTANTES:
 1. POR DEFECTO TODO EL TEXTO ES **UNA SOLA TAREA**. Esta es la regla más importante de todas. Es mucho peor partir de más que de menos: si el usuario recibe 4 tareas sueltas cuando dictó una sola idea, tiene que borrarlas a mano una por una.
 2. SOLO podés devolver más de una tarea si hay una señal EXPLÍCITA de separación en el texto. Las señales válidas son ÚNICAMENTE estas:
@@ -459,6 +453,7 @@ REGLAS IMPORTANTES:
 9. CRÍTICO — "update", "complete" y "delete" SOLO se pueden usar si podés indicar el "id" EXACTO de una tarea de la lista de IDs existentes. Si el usuario menciona una tarea por su texto pero NO sabés su id, NO uses "update": usá "create". Es preferible crear una tarea de más (que el usuario puede borrar) a descartar en silencio lo que pidió.
 10. Ante la duda entre crear o modificar, SIEMPRE elegí "create".
 11. Toda acción "update"/"complete"/"delete" DEBE incluir el campo "id" con un número de la lista de IDs existentes. Sin id, esa acción se descarta.
+12. NUNCA asignes la tarea a una persona por más que el texto mencione un nombre (ej. "llamar a Marcos" NO asigna la tarea a Marcos, es solo parte de la descripción). La asignación de persona es siempre manual, hecha por el usuario en la interfaz — no es parte de tu trabajo.
 
 IDs de tareas existentes: ${JSON.stringify(existingTaskIds || [])}
 
@@ -469,7 +464,6 @@ Responde SIEMPRE con un JSON con esta estructura:
       "action": "create",
       "text": "descripción limpia de la tarea",
       "date": "dd/mm/yy" o "a definir",
-      "person": "nombre" o "a definir",
       "type": "accion" | "para_pensar" | "a_definir",
       "urgent": false
     }
@@ -506,7 +500,9 @@ Responde SIEMPRE con un JSON con esta estructura:
           ...(a.id ? { id: Number(a.id) } : {}),
           ...(a.text ? { text: String(a.text).trim() } : {}),
           date: a.date || 'a definir',
-          person: a.person || 'a definir',
+          // El asignado de persona es SIEMPRE manual (desde la UI, ver
+          // task-card.tsx): aunque el modelo devuelva "person" por mencionar
+          // un nombre en el texto, se ignora acá a propósito.
           type: validTypes.includes(a.type) ? a.type : 'a_definir',
           urgent: Boolean(a.urgent),
         }));
