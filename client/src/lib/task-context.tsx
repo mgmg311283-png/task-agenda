@@ -14,6 +14,7 @@ interface TaskContextValue {
   dispatch: (action: Action) => void;
   moveExpiredAsync: (source: string) => Promise<{ moved: number; date: string }>;
   moveUrgentToActionAsync: (source: string) => Promise<{ moved: number }>;
+  pushTodayAsync: (source: string) => Promise<{ moved: number; date: string }>;
   undo: () => void;
   redo: () => void;
   canUndo: boolean;
@@ -86,12 +87,38 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     onSuccess: invalidate,
   });
 
+  /**
+   * Update optimista: el cambio se pinta en el cache antes de que conteste el
+   * servidor, asi tocar "+1 dia", urgente o favorita se siente instantaneo en
+   * vez de esperar el round-trip y el refetch. Si el server rechaza, se
+   * restauran los snapshots y el handler global de mutaciones avisa del error.
+   */
   const updateMutation = useMutation({
     mutationFn: async (data: { id: number; updates: Partial<Task>; source: string }) => {
       const res = await apiRequest('PATCH', `/api/tasks/${data.id}`, { ...data.updates, source: data.source });
       return res.json();
     },
-    onSuccess: invalidate,
+    onMutate: async (data) => {
+      // Cancelar refetches en vuelo para que no pisen el valor optimista.
+      await queryClient.cancelQueries({ queryKey: ['/api/tasks'] });
+      await queryClient.cancelQueries({ queryKey: ['/api/tasks/all'] });
+
+      const prevTasks = queryClient.getQueryData<Task[]>(['/api/tasks']);
+      const prevAll = queryClient.getQueryData<Task[]>(['/api/tasks/all']);
+
+      const patch = (list: Task[] | undefined) =>
+        list?.map(t => (t.id === data.id ? { ...t, ...data.updates } : t));
+
+      queryClient.setQueryData<Task[]>(['/api/tasks'], patch);
+      queryClient.setQueryData<Task[]>(['/api/tasks/all'], patch);
+
+      return { prevTasks, prevAll };
+    },
+    onError: (_err, _data, context) => {
+      if (context?.prevTasks) queryClient.setQueryData(['/api/tasks'], context.prevTasks);
+      if (context?.prevAll) queryClient.setQueryData(['/api/tasks/all'], context.prevAll);
+    },
+    onSettled: invalidate,
   });
 
   const completeMutation = useMutation({
@@ -143,6 +170,25 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   const moveUrgentToActionAsync = useCallback(async (source: string) => {
     return moveUrgentToActionMutation.mutateAsync({ source });
   }, [moveUrgentToActionMutation]);
+
+  // Pasa a mañana las tareas que vencen hoy. Va por un endpoint dedicado en vez
+  // de N PATCH desde el cliente: asi es un solo request, una sola entrada de
+  // undo (Ctrl+Z deshace el lote completo) y un solo evento agrupado en el log.
+  const pushTodayMutation = useMutation({
+    mutationFn: async (data: { source: string }): Promise<{ moved: number; date: string; changes: { id: number; before: string; after: string }[] }> => {
+      const res = await apiRequest('POST', '/api/tasks/push-today', { source: data.source });
+      return res.json();
+    },
+    meta: { skipGlobalError: true },
+    onSuccess: (result) => {
+      recordHistory(result.changes.map(c => ({ id: c.id, before: { date: c.before }, after: { date: c.after } })));
+      invalidate();
+    },
+  });
+
+  const pushTodayAsync = useCallback(async (source: string) => {
+    return pushTodayMutation.mutateAsync({ source });
+  }, [pushTodayMutation]);
 
   const deleteAllMutation = useMutation({
     mutationFn: async (data: { source: string }): Promise<{ deleted: number; ids: number[] }> => {
@@ -264,6 +310,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
       dispatch,
       moveExpiredAsync,
       moveUrgentToActionAsync,
+      pushTodayAsync,
       undo,
       redo,
       canUndo: undoStack.length > 0,

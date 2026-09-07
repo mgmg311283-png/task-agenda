@@ -4,7 +4,10 @@ import { Task } from '@/lib/types';
 import { TaskCard } from './task-card';
 import { Skeleton } from './skeleton';
 import { cn } from '@/lib/utils';
-import { isToday, advanceDays } from '@/lib/date-utils';
+import { isToday } from '@/lib/date-utils';
+import { useTasks } from '@/lib/task-context';
+import { toast } from '@/hooks/use-toast';
+import { useState } from 'react';
 import { CalendarArrowUp } from 'lucide-react';
 
 interface KanbanColumnProps {
@@ -27,6 +30,8 @@ const EMPTY_MESSAGES = {
 
 export function KanbanColumn({ id, title, tasks, color, isLoading, onComplete, onDelete, onUpdate, onDuplicate }: KanbanColumnProps) {
   const { setNodeRef } = useDroppable({ id });
+  const { pushTodayAsync } = useTasks();
+  const [isPushing, setIsPushing] = useState(false);
 
   const colorStyles = {
     urgent: "bg-urgent border-urgent-foreground/20 text-urgent-foreground",
@@ -44,10 +49,24 @@ export function KanbanColumn({ id, title, tasks, color, isLoading, onComplete, o
 
   const todayCount = color === 'urgent' ? tasks.filter(t => isToday(t.date)).length : 0;
 
-  const pushTodayToTomorrow = () => {
-    tasks.filter(t => isToday(t.date)).forEach(t => {
-      onUpdate(t.id, { date: advanceDays(t.date, 1) });
-    });
+  const pushTodayToTomorrow = async () => {
+    if (todayCount === 0 || isPushing) return;
+    setIsPushing(true);
+    try {
+      const result = await pushTodayAsync('UI');
+      toast({
+        title: `${result.moved} tarea${result.moved === 1 ? '' : 's'} a mañana`,
+        description: result.moved > 0 ? `Nueva fecha: ${result.date}` : undefined,
+      });
+    } catch (err) {
+      toast({
+        title: 'No se pudieron pasar las tareas',
+        description: err instanceof Error ? err.message : 'Error desconocido',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsPushing(false);
+    }
   };
 
   return (
@@ -65,10 +84,10 @@ export function KanbanColumn({ id, title, tasks, color, isLoading, onComplete, o
           {color === 'urgent' && (
             <button
               onClick={pushTodayToTomorrow}
-              disabled={todayCount === 0}
+              disabled={todayCount === 0 || isPushing}
               className={cn(
                 "flex items-center gap-1 text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full border transition-colors",
-                todayCount === 0
+                todayCount === 0 || isPushing
                   ? "opacity-40 cursor-default border-transparent"
                   : "bg-black/5 border-black/10 hover:bg-black/10"
               )}

@@ -26,7 +26,18 @@ function getSortedTasks(tasks: Task[], columnId: string, personFilter: string, s
     const colTasks = tasks.filter(t => {
         if (t.status !== 'activa') return false;
         if (personFilter && t.person.toLowerCase() !== personFilter.toLowerCase()) return false;
-        if (searchQuery && !t.text.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+        // Buscar tambien por persona y por numero de tarea (#123 o 123): la
+        // tarjeta muestra el id y la gente lo usa para referirse a una tarea,
+        // pero antes escribir "#45" no encontraba nada.
+        if (searchQuery) {
+            const q = searchQuery.toLowerCase().trim();
+            const qId = q.replace(/^#/, '');
+            const matches =
+                t.text.toLowerCase().includes(q) ||
+                t.person.toLowerCase().includes(q) ||
+                (qId !== '' && /^\d+$/.test(qId) && String(t.id).includes(qId));
+            if (!matches) return false;
+        }
         if (priorityFilter && t.priority !== priorityFilter) return false;
         if (starredFilter && !t.starred) return false;
         // "Mías" = las que YO escribi (createdByUserId), esten o no

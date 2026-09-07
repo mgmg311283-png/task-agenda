@@ -1,4 +1,5 @@
-import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { QueryClient, QueryFunction, MutationCache } from "@tanstack/react-query";
+import { toast } from "@/hooks/use-toast";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -50,7 +51,35 @@ export const getQueryFn: <T>(options: {
     return await res.json();
   };
 
+/**
+ * Antes, si una escritura fallaba (sesion vencida, permiso denegado, caida de
+ * red, error del servidor) no pasaba absolutamente nada visible: la mutacion
+ * quedaba en error, nadie lo miraba, y el proximo refetch de 5s devolvia el
+ * valor viejo. El usuario veia que "no guardo" sin saber por que.
+ *
+ * Este handler global avisa por toast ante cualquier mutacion fallida. Una
+ * mutacion que ya muestra su propio mensaje puede optar por salirse con
+ * `meta: { skipGlobalError: true }`.
+ */
+const mutationCache = new MutationCache({
+  onError: (error, _vars, _ctx, mutation) => {
+    if (mutation.meta?.skipGlobalError) return;
+
+    const raw = error instanceof Error ? error.message : String(error);
+    const isAuth = /^(401|403)/.test(raw);
+
+    toast({
+      title: isAuth ? "Sesión vencida o sin permiso" : "No se pudo guardar el cambio",
+      description: isAuth
+        ? "Volvé a iniciar sesión para seguir editando."
+        : raw.slice(0, 200),
+      variant: "destructive",
+    });
+  },
+});
+
 export const queryClient = new QueryClient({
+  mutationCache,
   defaultOptions: {
     queries: {
       queryFn: getQueryFn({ on401: "throw" }),

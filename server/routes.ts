@@ -5,7 +5,7 @@ import { storage } from "./storage";
 import { requireAuth, requireAdmin, getScope } from "./auth";
 import { diffLog, describeAction } from "./audit";
 import { insertTaskSchema, updateTaskSchema } from "@shared/schema";
-import { parse, isValid, isBefore, startOfDay, format } from "date-fns";
+import { parse, isValid, isBefore, startOfDay, format, addDays, isSameDay } from "date-fns";
 import OpenAI from "openai";
 import rateLimit from "express-rate-limit";
 
@@ -280,6 +280,50 @@ export async function registerRoutes(
     }
 
     res.json({ moved: changes.length, changes });
+  });
+
+  // Pasa a mañana todas las tareas activas que vencen HOY (las que la UI
+  // muestra en verde). Espejo de move-expired: mismo patron de scope, de
+  // batchId en el log y de `changes` para que el cliente registre UNA sola
+  // entrada de undo en vez de una por tarea.
+  app.post("/api/tasks/push-today", requireAuth, async (req, res) => {
+    const today = startOfDay(new Date());
+    const tomorrow = addDays(today, 1);
+    const scope = getScope(req);
+
+    const activeTasks = await storage.getActiveTasks(scope);
+    const changes: { id: number; before: string; after: string }[] = [];
+
+    for (const task of activeTasks) {
+      if (task.date === "a definir") continue;
+      const taskDate = parseTaskDate(task.date);
+      if (!taskDate || !isSameDay(taskDate, today)) continue;
+
+      // Respetar el formato de año que ya traia la tarea (yy vs yyyy).
+      const tomorrowFmt = task.date.length > 8
+        ? format(tomorrow, "dd/MM/yyyy")
+        : format(tomorrow, "dd/MM/yy");
+      await storage.updateTask(task.id, { date: tomorrowFmt });
+      changes.push({ id: task.id, before: task.date, after: tomorrowFmt });
+    }
+
+    if (changes.length > 0) {
+      const batchId = randomUUID();
+      await storage.createLogs(
+        changes.map((c) => ({
+          action: "PUSH_TODAY",
+          details: `Tarea #${c.id}: ${c.before} → ${c.after}`,
+          taskId: c.id,
+          batchId,
+          userId: scope.userId,
+          originalValues: JSON.stringify({ date: c.before }),
+          newValues: JSON.stringify({ date: c.after }),
+          source: req.body?.source || "UI",
+        })),
+      );
+    }
+
+    res.json({ moved: changes.length, date: format(tomorrow, "dd/MM/yy"), changes });
   });
 
   // Delete all active tasks — solo admin y con confirmacion explicita.
