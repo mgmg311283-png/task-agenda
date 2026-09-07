@@ -4,6 +4,8 @@ import { Task } from '@/lib/types';
 import { TaskCard } from './task-card';
 import { Skeleton } from './skeleton';
 import { cn } from '@/lib/utils';
+import { isToday, advanceDays } from '@/lib/date-utils';
+import { CalendarArrowUp } from 'lucide-react';
 
 interface KanbanColumnProps {
   id: string;
@@ -40,6 +42,14 @@ export function KanbanColumn({ id, title, tasks, color, isLoading, onComplete, o
 
   const empty = EMPTY_MESSAGES[color];
 
+  const todayCount = color === 'urgent' ? tasks.filter(t => isToday(t.date)).length : 0;
+
+  const pushTodayToTomorrow = () => {
+    tasks.filter(t => isToday(t.date)).forEach(t => {
+      onUpdate(t.id, { date: advanceDays(t.date, 1) });
+    });
+  };
+
   return (
     <div className="flex flex-col h-full w-full md:min-w-[0] md:flex-1 border-r last:border-r-0 border-border bg-background shadow-sm">
       {/* Header — hidden on mobile since tabs handle it */}
@@ -51,9 +61,28 @@ export function KanbanColumn({ id, title, tasks, color, isLoading, onComplete, o
           <span className={cn("w-2 h-2 rounded-full", dotColors[color])} />
           {title}
         </h3>
-        <span className="text-xs font-bold opacity-60 bg-black/5 px-2 py-0.5 rounded-full">
-          {tasks.length}
-        </span>
+        <div className="flex items-center gap-2">
+          {color === 'urgent' && (
+            <button
+              onClick={pushTodayToTomorrow}
+              disabled={todayCount === 0}
+              className={cn(
+                "flex items-center gap-1 text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full border transition-colors",
+                todayCount === 0
+                  ? "opacity-40 cursor-default border-transparent"
+                  : "bg-black/5 border-black/10 hover:bg-black/10"
+              )}
+              title={todayCount === 0 ? "No hay tareas de hoy" : `Pasar ${todayCount} tarea${todayCount === 1 ? '' : 's'} de hoy a mañana`}
+              data-testid="btn-push-today-to-tomorrow"
+            >
+              <CalendarArrowUp className="w-3 h-3" />
+              {todayCount > 0 && <span>{todayCount}</span>}
+            </button>
+          )}
+          <span className="text-xs font-bold opacity-60 bg-black/5 px-2 py-0.5 rounded-full">
+            {tasks.length}
+          </span>
+        </div>
       </div>
 
       {/* Content */}
