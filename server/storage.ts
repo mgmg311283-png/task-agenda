@@ -32,6 +32,27 @@ function scopeWhere(scope: Scope) {
   return inArray(tasks.assignedUserId, ids);
 }
 
+/**
+ * Una tarea que entra SIN CLASIFICAR (type "a_definir" y sin marcar urgente)
+ * caia en la columna ACCION, mezclada con el trabajo ya triado, donde pasaba
+ * desapercibida. Pedido explicito: que caiga en URGENTE para que se vea.
+ *
+ * Alcanza con poner urgent=true: las columnas ACCION y PENSAR filtran por
+ * `!t.urgent` (ver client/src/components/kanban-board.tsx), asi que la tarea
+ * queda SOLO en URGENTE y no duplicada en dos columnas. Por eso NO se toca
+ * `type`: sigue siendo "a_definir", que es justamente la marca de "sin
+ * clasificar" y lo que permite distinguirla de una accion elegida a mano.
+ *
+ * Solo se aplica al ALTA, nunca en un update: mover una urgente a accion
+ * (arrastrandola, o con la accion masiva "urgentes a accion") tiene que poder
+ * dejarla en a_definir sin que esto la vuelva a marcar como urgente.
+ */
+function urgentePorDefectoSiNoSeClasifico<T extends Partial<InsertTask>>(task: T): T {
+  const sinTipo = !task.type || task.type === "a_definir";
+  const sinUrgencia = !task.urgent;
+  return sinTipo && sinUrgencia ? { ...task, urgent: true } : task;
+}
+
 export class DatabaseStorage {
   // ── Tareas ─────────────────────────────────────────────────────────────
   async getActiveTasks(scope: Scope): Promise<Task[]> {
@@ -67,7 +88,7 @@ export class DatabaseStorage {
   }
 
   async createTask(task: InsertTask): Promise<Task> {
-    const result = await db.insert(tasks).values(task).returning();
+    const result = await db.insert(tasks).values(urgentePorDefectoSiNoSeClasifico(task)).returning();
     return result[0];
   }
 
@@ -112,7 +133,9 @@ export class DatabaseStorage {
 
   async importTasks(tasksData: InsertTask[]): Promise<Task[]> {
     if (tasksData.length === 0) return [];
-    return db.insert(tasks).values(tasksData).returning();
+    // Misma regla que en el alta: una fila del CSV sin TIPO tampoco esta
+    // clasificada, asi que entra por URGENTE en vez de colarse en ACCION.
+    return db.insert(tasks).values(tasksData.map(urgentePorDefectoSiNoSeClasifico)).returning();
   }
 
   async getNextId(): Promise<number> {

@@ -48,7 +48,7 @@ export function Dashboard() {
           },
           source: 'UI'
         });
-        toast({ title: "Nueva tarea creada", description: "Aparece en ACCIÓN: tocá su texto para editarla." });
+        toast({ title: "Nueva tarea creada", description: "Aparece en URGENTE: tocá su texto para editarla." });
       }
 
       // Ctrl+Shift+? = Show shortcuts
