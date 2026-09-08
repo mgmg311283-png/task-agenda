@@ -287,7 +287,14 @@ export async function registerRoutes(
   // batchId en el log y de `changes` para que el cliente registre UNA sola
   // entrada de undo en vez de una por tarea.
   app.post("/api/tasks/push-today", requireAuth, async (req, res) => {
-    const today = startOfDay(new Date());
+    // El servidor corre en UTC y los usuarios estan en UTC-3: entre las 21:00
+    // y medianoche hora local, `new Date()` aca ya es el dia siguiente. Si el
+    // server decidiera solo, moveria un conjunto distinto al que el boton
+    // conto y mostro en pantalla. Por eso el cliente manda SU dia de hoy.
+    const clientToday = typeof req.body?.today === "string"
+      ? parseTaskDate(req.body.today)
+      : null;
+    const today = startOfDay(clientToday ?? new Date());
     const tomorrow = addDays(today, 1);
     const scope = getScope(req);
 

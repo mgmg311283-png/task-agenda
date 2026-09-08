@@ -2,6 +2,7 @@ import React, { createContext, useContext, useCallback, ReactNode, useState } fr
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from './queryClient';
 import { Task, LogEntry } from './types';
+import { formatDate } from './date-utils';
 
 interface TaskContextValue {
   state: {
@@ -175,8 +176,8 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   // de N PATCH desde el cliente: asi es un solo request, una sola entrada de
   // undo (Ctrl+Z deshace el lote completo) y un solo evento agrupado en el log.
   const pushTodayMutation = useMutation({
-    mutationFn: async (data: { source: string }): Promise<{ moved: number; date: string; changes: { id: number; before: string; after: string }[] }> => {
-      const res = await apiRequest('POST', '/api/tasks/push-today', { source: data.source });
+    mutationFn: async (data: { source: string; today: string }): Promise<{ moved: number; date: string; changes: { id: number; before: string; after: string }[] }> => {
+      const res = await apiRequest('POST', '/api/tasks/push-today', { source: data.source, today: data.today });
       return res.json();
     },
     meta: { skipGlobalError: true },
@@ -187,7 +188,8 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   });
 
   const pushTodayAsync = useCallback(async (source: string) => {
-    return pushTodayMutation.mutateAsync({ source });
+    // Mandamos el "hoy" del navegador para que el server no use el suyo (UTC).
+    return pushTodayMutation.mutateAsync({ source, today: formatDate(new Date()) });
   }, [pushTodayMutation]);
 
   const deleteAllMutation = useMutation({
