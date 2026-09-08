@@ -5,6 +5,7 @@ import { ThemeProvider } from "next-themes";
 import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { TaskProvider } from "@/lib/task-context";
+import { TimerProvider } from "@/lib/timer-context";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { Dashboard } from "@/pages/dashboard";
 import { LoginPage } from "@/pages/login";
@@ -58,10 +59,12 @@ function AuthGate() {
   // fuera del gate esas queries darian 401 en loop en la pantalla de login.
   return (
     <TaskProvider>
-      <ErrorBoundary>
-        <Router />
-      </ErrorBoundary>
-      <Toaster />
+      <TimerProvider>
+        <ErrorBoundary>
+          <Router />
+        </ErrorBoundary>
+        <Toaster />
+      </TimerProvider>
     </TaskProvider>
   );
 }

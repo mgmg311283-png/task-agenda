@@ -3,12 +3,13 @@ import { CSS } from '@dnd-kit/utilities';
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Check, Trash2, ArrowRightLeft, Pencil, CalendarIcon, ChevronRight, GripVertical, Copy, Zap, AlertCircle, TrendingUp, Star, History } from "lucide-react";
+import { Check, Trash2, ArrowRightLeft, Pencil, CalendarIcon, ChevronRight, GripVertical, Copy, Zap, Play, Square, AlertCircle, TrendingUp, Star, History } from "lucide-react";
 import { TaskHistoryDialog } from "@/components/task-history-dialog";
 import { Task } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { parseDateStr, formatDate, advanceDays, isOverdue, isToday } from "@/lib/date-utils";
 import { useState, memo } from 'react';
+import { useTimer, ElapsedLabel } from '@/lib/timer-context';
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth-context";
@@ -78,6 +79,8 @@ function TaskCardImpl({ task, onComplete, onDelete, onUpdate, onDuplicate }: Tas
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const { user } = useAuth();
+  const { running, isBusy, toggle } = useTimer();
+  const isRunning = running?.taskId === task.id;
   const isAdmin = user?.role === "admin";
   // Solo el admin puede reasignar tareas, y GET /api/users es admin-only en
   // el servidor — no tiene sentido dispararla para el resto.
@@ -108,7 +111,8 @@ function TaskCardImpl({ task, onComplete, onDelete, onUpdate, onDuplicate }: Tas
         className={cn(
           "rounded-none border-t-0 border-x-0 border-b shadow-none hover:bg-muted/30 transition-all group",
           overdue && "border-l-2 border-l-orange-400",
-          isTaskToday && "border-l-2 border-l-green-500 bg-green-50/30 dark:bg-green-950/20 hover:shadow-md"
+          isTaskToday && "border-l-2 border-l-green-500 bg-green-50/30 dark:bg-green-950/20 hover:shadow-md",
+          isRunning && "ring-1 ring-green-500 bg-green-50/60 dark:bg-green-950/40"
         )}
         data-testid={`card-task-${task.id}`}
       >
@@ -169,6 +173,29 @@ function TaskCardImpl({ task, onComplete, onDelete, onUpdate, onDuplicate }: Tas
                 aria-label={task.starred ? "Desmarcar favorita" : "Marcar favorita"}
               >
                 <Star className={cn("h-3 w-3", task.starred && "fill-current")} />
+              </Button>
+
+              {/* Cronómetro: una sola tarea a la vez (lo impone el servidor) */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  "h-6 w-6 rounded-none",
+                  isRunning
+                    ? "w-auto px-1.5 gap-1 text-green-700 bg-green-100 hover:bg-green-200 dark:bg-green-900 dark:text-green-300"
+                    : "hover:bg-green-50 hover:text-green-600 md:opacity-0 md:group-hover:opacity-100"
+                )}
+                onClick={(e) => { e.stopPropagation(); toggle(task.id); }}
+                onPointerDown={(e) => e.stopPropagation()}
+                disabled={isBusy}
+                title={isRunning ? "Detener cronómetro" : "Empezar a medir el tiempo"}
+                aria-label={isRunning ? `Detener cronómetro de la tarea #${task.id}` : `Empezar a medir el tiempo de la tarea #${task.id}`}
+                data-testid={`btn-timer-${task.id}`}
+              >
+                {isRunning ? <Square className="h-3 w-3 fill-current" /> : <Play className="h-3 w-3" />}
+                {isRunning && (
+                  <ElapsedLabel className="text-[10px] font-mono tabular-nums" />
+                )}
               </Button>
 
               {/* Toggle urgente */}

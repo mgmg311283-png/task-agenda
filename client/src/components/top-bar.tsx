@@ -10,6 +10,7 @@ import { Task, TaskStatus } from "@/lib/types";
 import { isTaskOverdue } from "@/lib/parser";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
+import { useTimer, ElapsedLabel } from "@/lib/timer-context";
 import {
   Dialog,
   DialogContent,
@@ -24,6 +25,8 @@ import { format } from "date-fns";
 
 export function TopBar() {
   const { state, dispatch, moveExpiredAsync, moveUrgentToActionAsync, importAsync, undo, redo, canUndo, canRedo } = useTasks();
+  const { running, isBusy, toggle } = useTimer();
+  const runningTask = running ? state.tasks.find(t => t.id === running.taskId) : undefined;
   const { user, logout } = useAuth();
   const isAdmin = user?.role === "admin";
   const [csvContent, setCsvContent] = useState("");
@@ -299,6 +302,26 @@ export function TopBar() {
               <span className="hidden sm:inline">Urgentes → Acción</span>
               <span className="font-bold">{urgentCount}</span>
             </Button>
+          )}
+
+          {/* Cronómetro en curso: la tarjeta activa puede estar scrolleada
+              fuera de pantalla o en otra columna, así que el estado tiene que
+              verse siempre desde acá. */}
+          {running && (
+            <button
+              onClick={() => toggle(running.taskId)}
+              disabled={isBusy}
+              className="flex items-center gap-1.5 text-[10px] font-mono px-2 py-0.5 rounded border border-green-500/40 bg-green-50 text-green-800 dark:bg-green-950 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900 transition-colors max-w-[220px]"
+              title={runningTask ? `Detener: ${runningTask.text}` : 'Detener cronómetro'}
+              aria-label="Detener el cronómetro en curso"
+              data-testid="btn-timer-running"
+            >
+              <span className="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse shrink-0" />
+              <ElapsedLabel className="tabular-nums font-bold shrink-0" />
+              <span className="truncate opacity-80">
+                {runningTask ? runningTask.text : `#${running.taskId}`}
+              </span>
+            </button>
           )}
 
           {/* Sync status indicator */}

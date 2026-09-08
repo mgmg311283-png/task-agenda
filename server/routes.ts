@@ -464,6 +464,95 @@ export async function registerRoutes(
 
   // ---- LOGS ----
 
+  // ── Medición de tiempo ──────────────────────────────────────────────
+
+  // Qué está corriendo ahora. Sirve para restaurar el estado al abrir la app
+  // en otro dispositivo: el cronómetro vive en la base, no en el navegador.
+  app.get("/api/timer/current", requireAuth, async (req, res) => {
+    const scope = getScope(req);
+    const entry = await storage.getRunningEntry(scope.userId);
+    res.json(entry ?? null);
+  });
+
+  app.post("/api/tasks/:id/timer/start", requireAuth, writeRateLimit, async (req, res) => {
+    const id = parseInt(String(req.params.id));
+    if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+
+    const scope = getScope(req);
+    // Mismo criterio que el resto: 404 si no es visible para este usuario,
+    // para no revelar la existencia de tareas ajenas.
+    const task = await storage.getTaskForScope(id, scope);
+    if (!task) return res.status(404).json({ message: "Task not found" });
+
+    const { started, stopped } = await storage.startTimer(id, scope.userId, req.body?.source || "UI");
+
+    await storage.createLog({
+      action: "TIMER_START",
+      details: `Cronómetro iniciado en #${id}`,
+      taskId: id,
+      userId: scope.userId,
+      source: req.body?.source || "UI",
+    });
+
+    res.json({ started, stopped: stopped ?? null });
+  });
+
+  app.post("/api/timer/stop", requireAuth, writeRateLimit, async (req, res) => {
+    const scope = getScope(req);
+    const stopped = await storage.stopTimer(scope.userId);
+    if (!stopped) return res.json(null);
+
+    const secs = stopped.endedAt
+      ? Math.round((new Date(stopped.endedAt).getTime() - new Date(stopped.startedAt).getTime()) / 1000)
+      : 0;
+
+    await storage.createLog({
+      action: "TIMER_STOP",
+      details: `Cronómetro detenido en #${stopped.taskId} (${Math.round(secs / 60)} min)`,
+      taskId: stopped.taskId,
+      userId: scope.userId,
+      source: req.body?.source || "UI",
+    });
+
+    res.json(stopped);
+  });
+
+  app.get("/api/tasks/:id/time-entries", requireAuth, async (req, res) => {
+    const id = parseInt(String(req.params.id));
+    if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+    const scope = getScope(req);
+    const task = await storage.getTaskForScope(id, scope);
+    if (!task) return res.status(404).json({ message: "Task not found" });
+    res.json(await storage.getEntriesForTask(id, scope.userId));
+  });
+
+  // Borrar una entrada mala (tipicamente una que cerro el corte automatico).
+  // Sin esto, un dato erroneo queda para siempre torciendo los promedios.
+  app.delete("/api/time-entries/:id", requireAuth, writeRateLimit, async (req, res) => {
+    const id = parseInt(String(req.params.id));
+    if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+    const scope = getScope(req);
+    const ok = await storage.deleteTimeEntry(id, scope.userId);
+    if (!ok) return res.status(404).json({ message: "Entry not found" });
+    res.json({ deleted: true });
+  });
+
+  app.get("/api/time/summary", requireAuth, async (req, res) => {
+    const scope = getScope(req);
+    // La zona horaria la manda el cliente: los timestamps estan en UTC pero
+    // "cuanto trabaje el martes" se agrupa por dia LOCAL.
+    const rawTz = typeof req.query.tz === "string" ? req.query.tz : "UTC";
+    const tz = /^[A-Za-z_\/+-]{1,64}$/.test(rawTz) ? rawTz : "UTC";
+    const rawDays = parseInt(req.query.days as string);
+    const days = Number.isFinite(rawDays) ? Math.min(Math.max(rawDays, 1), 365) : 30;
+
+    try {
+      res.json(await storage.getTimeSummary(scope.userId, tz, days));
+    } catch (e: any) {
+      res.status(400).json({ message: e.message });
+    }
+  });
+
   app.get("/api/logs", requireAuth, async (req, res) => {
     // Clamp: sin esto, ?limit=999999 traia la tabla de logs completa.
     const raw = parseInt(req.query.limit as string);

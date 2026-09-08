@@ -2,10 +2,10 @@ import { eq, and, or, desc, asc, sql, inArray, isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import {
-  tasks, logs, users,
+  tasks, logs, users, timeEntries,
   type Task, type InsertTask, type UpdateTask,
   type LogEntry, type InsertLog,
-  type User, type InsertUser,
+  type User, type InsertUser, type TimeEntry,
 } from "@shared/schema";
 import type { Scope } from "./auth";
 
@@ -141,6 +141,110 @@ export class DatabaseStorage {
   async createLog(log: InsertLog): Promise<LogEntry> {
     const result = await db.insert(logs).values(log).returning();
     return result[0];
+  }
+
+  // ── Medición de tiempo ──────────────────────────────────────────────
+  //
+  // Corte de seguridad para el timer olvidado. Se aplica de forma perezosa
+  // (al consultar o al arrancar otro) en vez de con un cron: si alguien cierra
+  // el navegador un viernes con el cronómetro corriendo, el lunes tendría una
+  // entrada de 68 horas que ensucia todos los promedios. Queda marcada como
+  // auto_closed para poder revisarla, no descartada en silencio.
+  private static readonly MAX_RUNNING_HOURS = 8;
+
+  private async autoCloseStale(userId: number): Promise<void> {
+    const cutoff = new Date(Date.now() - DatabaseStorage.MAX_RUNNING_HOURS * 3600_000);
+    await db.update(timeEntries)
+      .set({
+        endedAt: sql`${timeEntries.startedAt} + interval '${sql.raw(String(DatabaseStorage.MAX_RUNNING_HOURS))} hours'`,
+        autoClosed: true,
+      })
+      .where(and(
+        eq(timeEntries.userId, userId),
+        isNull(timeEntries.endedAt),
+        sql`${timeEntries.startedAt} < ${cutoff}`,
+      ));
+  }
+
+  async getRunningEntry(userId: number): Promise<TimeEntry | undefined> {
+    await this.autoCloseStale(userId);
+    const rows = await db.select().from(timeEntries)
+      .where(and(eq(timeEntries.userId, userId), isNull(timeEntries.endedAt)))
+      .limit(1);
+    return rows[0];
+  }
+
+  /** Arranca el cronómetro en una tarea, cerrando el que estuviera corriendo. */
+  async startTimer(taskId: number, userId: number, source = "UI"): Promise<{ started: TimeEntry; stopped?: TimeEntry }> {
+    const stopped = await this.stopTimer(userId);
+    const rows = await db.insert(timeEntries)
+      .values({ taskId, userId, source })
+      .returning();
+    return { started: rows[0], stopped };
+  }
+
+  async stopTimer(userId: number): Promise<TimeEntry | undefined> {
+    await this.autoCloseStale(userId);
+    const rows = await db.update(timeEntries)
+      .set({ endedAt: new Date() })
+      .where(and(eq(timeEntries.userId, userId), isNull(timeEntries.endedAt)))
+      .returning();
+    return rows[0];
+  }
+
+  async deleteTimeEntry(id: number, userId: number): Promise<boolean> {
+    const rows = await db.delete(timeEntries)
+      .where(and(eq(timeEntries.id, id), eq(timeEntries.userId, userId)))
+      .returning();
+    return rows.length > 0;
+  }
+
+  async getEntriesForTask(taskId: number, userId: number): Promise<TimeEntry[]> {
+    return db.select().from(timeEntries)
+      .where(and(eq(timeEntries.taskId, taskId), eq(timeEntries.userId, userId)))
+      .orderBy(desc(timeEntries.startedAt));
+  }
+
+  /**
+   * Resumen para analizar en qué se va el tiempo. `tz` es la zona horaria del
+   * cliente (ej "America/Argentina/Buenos_Aires"): los timestamps se guardan en
+   * UTC pero "cuánto trabajé el martes" tiene que agruparse por día LOCAL.
+   */
+  async getTimeSummary(userId: number, tz: string, days: number) {
+    const byDay = await db.execute(sql`
+      SELECT (started_at AT TIME ZONE ${tz})::date AS day,
+             SUM(EXTRACT(EPOCH FROM (COALESCE(ended_at, now()) - started_at)))::bigint AS seconds
+      FROM time_entries
+      WHERE user_id = ${userId}
+        AND started_at >= now() - (${days} || ' days')::interval
+      GROUP BY day ORDER BY day
+    `);
+
+    const byTask = await db.execute(sql`
+      SELECT te.task_id, t.text,
+             SUM(EXTRACT(EPOCH FROM (COALESCE(te.ended_at, now()) - te.started_at)))::bigint AS seconds,
+             COUNT(*)::int AS sessions
+      FROM time_entries te
+      JOIN tasks t ON t.id = te.task_id
+      WHERE te.user_id = ${userId}
+        AND te.started_at >= now() - (${days} || ' days')::interval
+      GROUP BY te.task_id, t.text
+      ORDER BY seconds DESC LIMIT 20
+    `);
+
+    const suspicious = await db.execute(sql`
+      SELECT te.id, te.task_id, t.text, te.started_at, te.ended_at
+      FROM time_entries te
+      JOIN tasks t ON t.id = te.task_id
+      WHERE te.user_id = ${userId} AND te.auto_closed = true
+      ORDER BY te.started_at DESC LIMIT 20
+    `);
+
+    return {
+      byDay: byDay.rows,
+      byTask: byTask.rows,
+      suspicious: suspicious.rows,
+    };
   }
 
   async createLogs(entries: InsertLog[]): Promise<void> {

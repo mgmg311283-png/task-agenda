@@ -5,6 +5,7 @@ import { useTasks } from "@/lib/task-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { isTaskOverdue } from "@/lib/parser";
 import { useMemo } from "react";
+import { TimeReport } from "@/components/time-report";
 import { format, subDays, startOfDay } from "date-fns";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
 
@@ -93,6 +94,16 @@ export function MetricsView() {
           </Link>
           <h1 className="text-2xl font-bold font-mono">MÉTRICAS Y REPORTES</h1>
         </div>
+
+        {/* Medición de tiempo */}
+        <Card className="mb-6">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-mono uppercase">Tiempo medido</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <TimeReport />
+          </CardContent>
+        </Card>
 
         {/* Summary cards */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">

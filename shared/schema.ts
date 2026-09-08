@@ -71,6 +71,24 @@ export const logs = pgTable("logs", {
   index("logs_batch_idx").on(t.batchId),
 ]);
 
+// Medición de tiempo. Tabla aparte (y no un contador en `tasks`) para poder
+// responder cuándo se trabajó, no solo cuánto: un total suelto no sirve para
+// analizar en qué se va el tiempo.
+export const timeEntries = pgTable("time_entries", {
+  id: serial("id").primaryKey(),
+  taskId: integer("task_id").notNull(),
+  userId: integer("user_id").notNull(),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+  endedAt: timestamp("ended_at", { withTimezone: true }),
+  autoClosed: boolean("auto_closed").notNull().default(false),
+  source: text("source").notNull().default("UI"),
+}, (t) => [
+  index("time_entries_user_started_idx").on(t.userId, t.startedAt),
+  index("time_entries_task_idx").on(t.taskId),
+]);
+
+export type TimeEntry = typeof timeEntries.$inferSelect;
+
 export const insertTaskSchema = createInsertSchema(tasks).omit({
   id: true,
   createdAt: true,
