@@ -79,6 +79,20 @@ export class DatabaseStorage {
     return result[0];
   }
 
+  /**
+   * Aplica el MISMO cambio a varias tareas en una sola query.
+   * Las acciones masivas (move-expired, urgent-to-action, push-today) hacian
+   * un UPDATE por tarea dentro de un for con await: con 50 tareas eran 50
+   * viajes secuenciales a Postgres, que ademas comparte droplet con otras 3
+   * apps. Aca es una sola.
+   */
+  async updateTasksBulk(ids: number[], updates: UpdateTask): Promise<void> {
+    if (ids.length === 0) return;
+    await db.update(tasks)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(inArray(tasks.id, ids));
+  }
+
   async deleteTask(id: number): Promise<Task | undefined> {
     return this.updateTask(id, { status: "eliminada" });
   }

@@ -23,24 +23,32 @@ import { Textarea } from "@/components/ui/textarea";
 import { format } from "date-fns";
 
 export function TopBar() {
-  const { state, dispatch, moveExpiredAsync, moveUrgentToActionAsync, undo, redo, canUndo, canRedo } = useTasks();
+  const { state, dispatch, moveExpiredAsync, moveUrgentToActionAsync, importAsync, undo, redo, canUndo, canRedo } = useTasks();
   const { user, logout } = useAuth();
   const isAdmin = user?.role === "admin";
   const [csvContent, setCsvContent] = useState("");
   const [isImportOpen, setIsImportOpen] = useState(false);
   const { theme, setTheme } = useTheme();
   const [location] = useLocation();
-  const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'offline'>('synced');
+  const [isBrowserOnline, setIsBrowserOnline] = useState<boolean>(
+    typeof navigator === 'undefined' ? true : navigator.onLine,
+  );
+  // navigator.onLine solo mira la placa de red: con wifi conectado pero el
+  // servidor caido decia "Sync" igual. Ahora tambien pesa si la query de
+  // tareas esta fallando o refrescando.
+  const syncStatus: 'synced' | 'syncing' | 'offline' =
+    !isBrowserOnline || state.hasError ? 'offline'
+    : state.isFetching ? 'syncing'
+    : 'synced';
   const [focusMode, setFocusMode] = useState(false);
   const [presentationMode, setPresentationMode] = useState(false);
 
-  // Simulate sync status
   React.useEffect(() => {
-    const handleOnline = () => setSyncStatus('synced');
-    const handleOffline = () => setSyncStatus('offline');
+    const handleOnline = () => setIsBrowserOnline(true);
+    const handleOffline = () => setIsBrowserOnline(false);
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-    setSyncStatus(navigator.onLine ? 'synced' : 'offline');
+    setIsBrowserOnline(navigator.onLine);
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
@@ -59,14 +67,21 @@ export function TopBar() {
         PRIORIDAD: t.priority || 'normal'
     }));
     const csv = Papa.unparse(csvData);
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    // BOM: sin esto Excel abre el CSV en la codificacion del sistema y rompe
+    // todos los acentos y las ñ (que en esta app hay en casi todas las tareas).
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `agenda_export_${new Date().toISOString()}.csv`);
+    // toISOString() trae ':' y '.', que Windows no acepta en nombres de
+    // archivo: el navegador terminaba renombrandolo solo.
+    const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+    link.setAttribute('download', `agenda_export_${stamp}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    // El object URL quedaba vivo hasta recargar la pagina.
+    URL.revokeObjectURL(url);
     toast({ title: "Exportado", description: `${activeTasks.length} tareas exportadas a CSV` });
   };
 
@@ -85,7 +100,10 @@ export function TopBar() {
                 return {
                     id: 0,
                     date: row.FECHA || 'a definir',
-                    text: row.TAREA || 'Sin título',
+                    // Sin fallback: el .filter(t => t.text) de abajo nunca
+                    // filtraba nada porque 'Sin título' siempre era truthy, asi
+                    // que una fila vacia (",,,,") entraba como tarea fantasma.
+                    text: (row.TAREA || '').trim(),
                     person: row.PERSONA || 'a definir',
                     type,
                     urgent: row.URGENTE === 'urgente',
@@ -96,10 +114,18 @@ export function TopBar() {
             }).filter((t: any) => t.text);
 
             if (tasks.length > 0) {
-                dispatch({ type: 'IMPORT_CSV', payload: tasks, source: 'Import' });
-                toast({ title: "Importación exitosa", description: `${tasks.length} tareas agregadas` });
                 setIsImportOpen(false);
                 setCsvContent("");
+                importAsync(tasks, 'Import')
+                  .then((created) => toast({
+                    title: "Importación exitosa",
+                    description: `${created.length} tareas agregadas`,
+                  }))
+                  .catch((e) => toast({
+                    variant: "destructive",
+                    title: "Falló la importación",
+                    description: e instanceof Error ? e.message : 'Error desconocido',
+                  }));
             } else {
                 toast({ variant: "destructive", title: "Error", description: "No se encontraron tareas válidas." });
             }
@@ -278,16 +304,24 @@ export function TopBar() {
           {/* Sync status indicator */}
           <span
             className="text-[10px] font-mono px-1.5 py-0.5 rounded border"
-            title={syncStatus === 'offline' ? 'Sin conexión' : 'Sincronizado'}
+            title={
+              syncStatus === 'offline'
+                ? (isBrowserOnline ? 'No se puede contactar al servidor' : 'Sin conexión')
+                : syncStatus === 'syncing' ? 'Actualizando...' : 'Sincronizado'
+            }
+            aria-live="polite"
           >
             {syncStatus === 'offline' ? (
               <>
                 <span className="inline-block w-2 h-2 bg-orange-500 rounded-full mr-1"></span>
-                Offline
+                {isBrowserOnline ? 'Sin servidor' : 'Offline'}
               </>
             ) : (
               <>
-                <span className="inline-block w-2 h-2 bg-green-500 rounded-full mr-1 animate-pulse"></span>
+                <span className={cn(
+                  "inline-block w-2 h-2 rounded-full mr-1",
+                  syncStatus === 'syncing' ? "bg-yellow-500 animate-pulse" : "bg-green-500",
+                )}></span>
                 Sync
               </>
             )}

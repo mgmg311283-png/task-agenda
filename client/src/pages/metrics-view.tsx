@@ -14,6 +14,9 @@ function parseUpdatedAt(str: string): Date {
 
 export function MetricsView() {
   const { state } = useTasks();
+  // Mientras cargaba, allTasks estaba vacio y la pantalla mostraba "0 tareas,
+  // 0% completado" con toda la confianza, como si fuera el dato real.
+  const isEmpty = state.isLoading && state.allTasks.length === 0 && state.tasks.length === 0;
   const allTasks = state.allTasks || state.tasks;
   const activeTasks = allTasks.filter(t => t.status === 'activa');
   const completedTasks = allTasks.filter(t => t.status === 'completada');
@@ -70,6 +73,14 @@ export function MetricsView() {
   }, [state.logs]);
 
   const COLORS = ['#3b82f6', '#ef4444', '#eab308', '#10b981', '#8b5cf6', '#f97316'];
+
+  if (isEmpty) {
+    return (
+      <div className="min-h-screen bg-muted/30 p-4 font-sans flex items-center justify-center">
+        <p className="text-sm font-mono text-muted-foreground">Cargando métricas...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-muted/30 p-4 font-sans">

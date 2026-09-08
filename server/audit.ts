@@ -100,6 +100,7 @@ const ACTION_LABEL: Record<string, string> = {
   DELETE: "Eliminada",
   MOVE_EXPIRED: "Movida por vencimiento",
   MOVE_URGENT_TO_ACTION: "Urgente → Acción",
+  PUSH_TODAY: "Pasada de hoy a mañana",
   DELETE_ALL: "Borrado masivo",
   IMPORT: "Importada",
 };

@@ -11,11 +11,14 @@ interface TaskContextValue {
     logs: LogEntry[];
     lastId: number;
     isLoading: boolean;
+    isFetching: boolean;
+    hasError: boolean;
   };
   dispatch: (action: Action) => void;
   moveExpiredAsync: (source: string) => Promise<{ moved: number; date: string }>;
   moveUrgentToActionAsync: (source: string) => Promise<{ moved: number }>;
   pushTodayAsync: (source: string) => Promise<{ moved: number; date: string }>;
+  importAsync: (tasks: Partial<Task>[], source: string) => Promise<Task[]>;
   undo: () => void;
   redo: () => void;
   canUndo: boolean;
@@ -49,7 +52,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   const [undoStack, setUndoStack] = useState<HistoryEntry[]>([]);
   const [redoStack, setRedoStack] = useState<HistoryEntry[]>([]);
 
-  const { data: tasks = [], isLoading: tasksLoading } = useQuery<Task[]>({
+  const { data: tasks = [], isLoading: tasksLoading, isFetching: tasksFetching, isError: tasksError } = useQuery<Task[]>({
     queryKey: ['/api/tasks'],
     refetchInterval: 5000,
     refetchOnWindowFocus: true,
@@ -219,6 +222,13 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     },
   });
 
+  // Version await-able del import: antes la UI cantaba "Importación exitosa"
+  // apenas despachaba, sin esperar al servidor — si el backend rechazaba, el
+  // usuario ya habia leido que salio bien.
+  const importAsync = useCallback(async (tasksToImport: Partial<Task>[], source: string) => {
+    return importMutation.mutateAsync({ tasks: tasksToImport, source });
+  }, [importMutation]);
+
   const lastId = tasks.length > 0 ? Math.max(...tasks.map(t => t.id)) : 0;
 
   const findTask = useCallback((id: number) => {
@@ -304,6 +314,11 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     logs,
     lastId,
     isLoading: tasksLoading,
+    // Para que el indicador de sincronizacion diga la verdad: antes se basaba
+    // solo en navigator.onLine, que mira la placa de red, no si el servidor
+    // contesta. Con el backend caido seguia diciendo "sincronizado".
+    isFetching: tasksFetching,
+    hasError: tasksError,
   };
 
   return (
@@ -313,6 +328,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
       moveExpiredAsync,
       moveUrgentToActionAsync,
       pushTodayAsync,
+      importAsync,
       undo,
       redo,
       canUndo: undoStack.length > 0,

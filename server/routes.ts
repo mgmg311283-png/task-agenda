@@ -11,6 +11,10 @@ import rateLimit from "express-rate-limit";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
+  // El default del SDK son 10 minutos: una llamada colgada dejaba la request
+  // de express (y su conexion) tomada todo ese tiempo.
+  timeout: 30_000,
+  maxRetries: 1,
 });
 
 const parseRateLimit = rateLimit({
@@ -227,20 +231,31 @@ export async function registerRoutes(
 
     const todayStr = format(today, "dd/MM/yy");
 
+    // Se agrupan por fecha destino (a lo sumo dos: dd/MM/yy y dd/MM/yyyy) y se
+    // aplica un UPDATE por grupo, en vez de uno por tarea dentro del loop.
+    const byTarget = new Map<string, number[]>();
+    const queue = (target: string, task: { id: number; date: string }) => {
+      if (!byTarget.has(target)) byTarget.set(target, []);
+      byTarget.get(target)!.push(task.id);
+      changes.push({ id: task.id, before: task.date, after: target });
+    };
+
     for (const task of activeTasks) {
       if (task.date === "a definir") {
-        await storage.updateTask(task.id, { date: todayStr });
-        changes.push({ id: task.id, before: task.date, after: todayStr });
+        queue(todayStr, task);
         continue;
       }
       const taskDate = parseTaskDate(task.date);
       if (taskDate && isBefore(taskDate, today)) {
-        const todayFmt = task.date.length > 8
-          ? format(today, "dd/MM/yyyy")
-          : format(today, "dd/MM/yy");
-        await storage.updateTask(task.id, { date: todayFmt });
-        changes.push({ id: task.id, before: task.date, after: todayFmt });
+        queue(
+          task.date.length > 8 ? format(today, "dd/MM/yyyy") : format(today, "dd/MM/yy"),
+          task,
+        );
       }
+    }
+
+    for (const [target, ids] of Array.from(byTarget.entries())) {
+      await storage.updateTasksBulk(ids, { date: target });
     }
 
     // Una fila de log POR TAREA (antes se guardaba un solo log agregado y se
@@ -271,12 +286,13 @@ export async function registerRoutes(
     const activeTasks = await storage.getActiveTasks(scope);
     const changes: { id: number; beforeType: string }[] = [];
 
+    // Todas reciben exactamente el mismo cambio: un solo UPDATE alcanza.
     for (const task of activeTasks) {
       if (task.urgent === true) {
-        await storage.updateTask(task.id, { urgent: false, type: 'accion' });
         changes.push({ id: task.id, beforeType: task.type });
       }
     }
+    await storage.updateTasksBulk(changes.map((c) => c.id), { urgent: false, type: 'accion' });
 
     if (changes.length > 0) {
       const batchId = randomUUID();
@@ -316,6 +332,7 @@ export async function registerRoutes(
     const activeTasks = await storage.getActiveTasks(scope);
     const changes: { id: number; before: string; after: string }[] = [];
 
+    const byTargetPush = new Map<string, number[]>();
     for (const task of activeTasks) {
       if (task.date === "a definir") continue;
       const taskDate = parseTaskDate(task.date);
@@ -325,8 +342,13 @@ export async function registerRoutes(
       const tomorrowFmt = task.date.length > 8
         ? format(tomorrow, "dd/MM/yyyy")
         : format(tomorrow, "dd/MM/yy");
-      await storage.updateTask(task.id, { date: tomorrowFmt });
+      if (!byTargetPush.has(tomorrowFmt)) byTargetPush.set(tomorrowFmt, []);
+      byTargetPush.get(tomorrowFmt)!.push(task.id);
       changes.push({ id: task.id, before: task.date, after: tomorrowFmt });
+    }
+
+    for (const [target, ids] of Array.from(byTargetPush.entries())) {
+      await storage.updateTasksBulk(ids, { date: target });
     }
 
     if (changes.length > 0) {

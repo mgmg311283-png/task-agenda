@@ -11,16 +11,24 @@ export function Dashboard() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      const isInput = (e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'TEXTAREA';
+      const el = e.target as HTMLElement;
+      const isInput =
+        el.tagName === 'INPUT' ||
+        el.tagName === 'TEXTAREA' ||
+        el.isContentEditable;
 
-      // Ctrl+Z = Undo
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+      // Ctrl+Z = Undo.
+      // El chequeo de isInput importa: sin el, editar el texto de una tarea y
+      // apretar Ctrl+Z no deshacia lo que estabas escribiendo (ademas el
+      // preventDefault bloqueaba el undo nativo del navegador) sino que
+      // revertia el ultimo cambio guardado de OTRA tarea.
+      if (!isInput && (e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
         e.preventDefault();
         undo();
       }
 
       // Ctrl+Y / Ctrl+Shift+Z = Redo
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+      if (!isInput && (e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
         e.preventDefault();
         redo();
       }
@@ -40,7 +48,7 @@ export function Dashboard() {
           },
           source: 'UI'
         });
-        toast({ title: "Nueva tarea creada", description: "Presiona / para editar" });
+        toast({ title: "Nueva tarea creada", description: "Aparece en ACCIÓN: tocá su texto para editarla." });
       }
 
       // Ctrl+Shift+? = Show shortcuts

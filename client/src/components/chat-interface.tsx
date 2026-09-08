@@ -80,16 +80,26 @@ export function ChatInterface() {
     try {
       const existingTaskIds = state.tasks.map(t => t.id);
 
-      const response = await fetch(`/api/parse`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, existingTaskIds }),
-      });
+      // Sin timeout, si la llamada a la IA se colgaba el fetch no resolvia
+      // nunca: isProcessing quedaba en true y el chat se trababa para siempre,
+      // sin forma de recuperarlo salvo recargar la pagina.
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 45_000);
+      let response: Response;
+      try {
+        response = await fetch(`/api/parse`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text, existingTaskIds }),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       if (!response.ok) {
         const err = await response.json();
         addMessage('system', err.message || 'Error al procesar con IA.', 'error');
-        setIsProcessing(false);
         return;
       }
 
@@ -98,7 +108,6 @@ export function ChatInterface() {
 
       if (actions.length === 0) {
         addMessage('system', parsed.summary || 'No entendí el comando.', 'error');
-        setIsProcessing(false);
         return;
       }
 
@@ -189,11 +198,19 @@ export function ChatInterface() {
         toast({ title: parsed.summary, duration: 3000 });
       }
 
-    } catch {
-      addMessage('system', 'Error de conexión con el servidor.', 'error');
+    } catch (err) {
+      addMessage(
+        'system',
+        (err as Error)?.name === 'AbortError'
+          ? 'La IA tardó demasiado en responder. Probá de nuevo o cargá la tarea a mano.'
+          : 'Error de conexión con el servidor.',
+        'error',
+      );
+    } finally {
+      // En finally: antes estaba suelto al final y cada return temprano tenia
+      // que acordarse de apagarlo a mano.
+      setIsProcessing(false);
     }
-
-    setIsProcessing(false);
   };
 
   const handleSubmit = async (e?: React.FormEvent) => {

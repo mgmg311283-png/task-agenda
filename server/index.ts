@@ -96,6 +96,10 @@ app.use(
       // re-loguearse seguido, dejan de usar la app.
       maxAge: 90 * 24 * 60 * 60 * 1000,
     },
+    // Sin esto los 90 dias corrian desde el login y no se renovaban: alguien
+    // que usa la app todos los dias igual quedaba afuera al dia 90. Con
+    // rolling, cada request corre el vencimiento hacia adelante.
+    rolling: true,
   }),
 );
 
