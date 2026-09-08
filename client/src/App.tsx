@@ -1,4 +1,5 @@
 import { Switch, Route } from "wouter";
+import { lazy, Suspense } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
 import { queryClient } from "./lib/queryClient";
@@ -6,11 +7,15 @@ import { Toaster } from "@/components/ui/toaster";
 import { TaskProvider } from "@/lib/task-context";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { Dashboard } from "@/pages/dashboard";
-import { LogView } from "@/pages/log-view";
-import { MetricsView } from "@/pages/metrics-view";
 import { LoginPage } from "@/pages/login";
-import { UsersView } from "@/pages/users-view";
 import NotFound from "@/pages/not-found";
+
+// El tablero y el login se cargan siempre; log, metricas y usuarios son
+// pantallas secundarias (y traen recharts, que es pesado). Cargarlas aparte
+// baja el bundle inicial, que era un unico archivo de ~1MB.
+const LogView = lazy(() => import("@/pages/log-view").then(m => ({ default: m.LogView })));
+const MetricsView = lazy(() => import("@/pages/metrics-view").then(m => ({ default: m.MetricsView })));
+const UsersView = lazy(() => import("@/pages/users-view").then(m => ({ default: m.UsersView })));
 import { ErrorBoundary } from "@/components/error-boundary";
 
 // Un solo tablero para todos los roles: el servidor ya filtra que cada uno
@@ -19,13 +24,19 @@ import { ErrorBoundary } from "@/components/error-boundary";
 // (import, borrado masivo, usuarios) para quien no sea admin.
 function Router() {
   return (
-    <Switch>
-      <Route path="/" component={Dashboard} />
-      <Route path="/log" component={LogView} />
-      <Route path="/metrics" component={MetricsView} />
-      <Route path="/usuarios" component={UsersView} />
-      <Route component={NotFound} />
-    </Switch>
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-sm text-muted-foreground font-mono">Cargando...</p>
+      </div>
+    }>
+      <Switch>
+        <Route path="/" component={Dashboard} />
+        <Route path="/log" component={LogView} />
+        <Route path="/metrics" component={MetricsView} />
+        <Route path="/usuarios" component={UsersView} />
+        <Route component={NotFound} />
+      </Switch>
+    </Suspense>
   );
 }
 

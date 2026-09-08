@@ -76,7 +76,7 @@ export const insertTaskSchema = createInsertSchema(tasks).omit({
   createdAt: true,
   updatedAt: true,
 }).extend({
-  text: z.string().min(1, "El texto de la tarea es requerido").max(500, "Máximo 500 caracteres"),
+  text: z.string().trim().min(1, "El texto de la tarea es requerido").max(500, "Máximo 500 caracteres"),
   date: z.string().optional().default("a definir"),
   person: z.string().optional().default("a definir"),
   priority: z.enum(['baja', 'normal', 'alta']).optional().default('normal'),

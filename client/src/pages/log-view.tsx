@@ -19,10 +19,23 @@ const ACTION_COLORS: Record<string, string> = {
   DELETE_ALL: 'text-red-700 bg-red-100 dark:bg-red-900 dark:text-red-300',
   IMPORT: 'text-orange-700 bg-orange-50 dark:bg-orange-950 dark:text-orange-300',
   MOVE_EXPIRED: 'text-yellow-700 bg-yellow-50 dark:bg-yellow-950 dark:text-yellow-300',
+  MOVE_URGENT_TO_ACTION: 'text-cyan-700 bg-cyan-50 dark:bg-cyan-950 dark:text-cyan-300',
+  PUSH_TODAY: 'text-emerald-700 bg-emerald-50 dark:bg-emerald-950 dark:text-emerald-300',
 };
 
-const ALL_ACTIONS = ['CREATE', 'UPDATE', 'COMPLETE', 'DELETE', 'IMPORT', 'MOVE_EXPIRED'];
+// Se deriva del mapa de colores para que no se desincronicen: faltaban
+// MOVE_URGENT_TO_ACTION (ya presente en la base) y DELETE_ALL, asi que no se
+// podian filtrar aunque el servidor los venia registrando.
+const ALL_ACTIONS = Object.keys(ACTION_COLORS);
 const ALL_SOURCES = ['UI', 'Chat', 'Audio', 'Import'];
+
+const ACTION_LABELS: Record<string, string> = {
+  MOVE_URGENT_TO_ACTION: 'URGENTE→ACCIÓN',
+  MOVE_EXPIRED: 'VENCIDAS→HOY',
+  PUSH_TODAY: 'HOY→MAÑANA',
+  DELETE_ALL: 'BORRADO MASIVO',
+};
+const actionLabel = (a: string) => ACTION_LABELS[a] ?? a;
 
 export function LogView() {
   const { state, dispatch } = useTasks();
@@ -99,7 +112,7 @@ export function LogView() {
                   : "border-border text-muted-foreground hover:border-foreground hover:text-foreground"
               )}
             >
-              {action}
+              {actionLabel(action)}
             </button>
           ))}
         </div>
@@ -163,7 +176,7 @@ export function LogView() {
                     {format(new Date(log.timestamp), "dd/MM/yy HH:mm:ss")}
                   </span>
                   <span className={cn("px-1.5 py-0.5 text-[10px] font-bold uppercase shrink-0", actionColor)}>
-                    {log.action}
+                    {actionLabel(log.action)}
                   </span>
                   <span className="text-muted-foreground shrink-0 border border-border px-1">
                     {log.source}

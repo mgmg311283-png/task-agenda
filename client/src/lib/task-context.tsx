@@ -139,8 +139,8 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   });
 
   const moveExpiredMutation = useMutation({
-    mutationFn: async (data: { source: string }): Promise<{ moved: number; date: string; changes: { id: number; before: string; after: string }[] }> => {
-      const res = await apiRequest('POST', '/api/tasks/move-expired', { source: data.source });
+    mutationFn: async (data: { source: string; today: string }): Promise<{ moved: number; date: string; changes: { id: number; before: string; after: string }[] }> => {
+      const res = await apiRequest('POST', '/api/tasks/move-expired', { source: data.source, today: data.today });
       return res.json();
     },
     onSuccess: (result) => {
@@ -150,7 +150,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   });
 
   const moveExpiredAsync = useCallback(async (source: string) => {
-    return moveExpiredMutation.mutateAsync({ source });
+    return moveExpiredMutation.mutateAsync({ source, today: formatDate(new Date()) });
   }, [moveExpiredMutation]);
 
   const moveUrgentToActionMutation = useMutation({
@@ -258,7 +258,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
         break;
       }
       case 'MOVE_EXPIRED':
-        moveExpiredMutation.mutate({ source: action.source });
+        moveExpiredMutation.mutate({ source: action.source, today: formatDate(new Date()) });
         break;
       case 'MOVE_URGENT_TO_ACTION':
         moveUrgentToActionMutation.mutate({ source: action.source });

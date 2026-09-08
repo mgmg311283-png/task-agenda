@@ -20,6 +20,7 @@ interface KanbanColumnProps {
   onDelete: (id: number) => void;
   onUpdate: (id: number, data: Partial<Task>) => void;
   onDuplicate?: (task: Task) => void;
+  isFiltered?: boolean;
 }
 
 const EMPTY_MESSAGES = {
@@ -28,7 +29,7 @@ const EMPTY_MESSAGES = {
   think: { label: 'SIN IDEAS', sub: 'Arrastrá tareas aquí' },
 };
 
-export function KanbanColumn({ id, title, tasks, color, isLoading, onComplete, onDelete, onUpdate, onDuplicate }: KanbanColumnProps) {
+export function KanbanColumn({ id, title, tasks, color, isLoading, onComplete, onDelete, onUpdate, onDuplicate, isFiltered }: KanbanColumnProps) {
   const { setNodeRef } = useDroppable({ id });
   const { pushTodayAsync } = useTasks();
   const [isPushing, setIsPushing] = useState(false);
@@ -132,8 +133,15 @@ export function KanbanColumn({ id, title, tasks, color, isLoading, onComplete, o
                 ))}
                 {tasks.length === 0 && (
                   <div className="h-32 flex flex-col items-center justify-center border-2 border-dashed border-border opacity-40">
-                    <span className="text-muted-foreground text-xs font-mono mb-1">{empty.label}</span>
-                    <span className="text-muted-foreground/60 text-[10px]">{empty.sub}</span>
+                    {/* Con filtros puestos, "SIN URGENTES / Todo bajo control"
+                        hacia creer que no habia trabajo pendiente cuando en
+                        realidad estaba oculto por un filtro. */}
+                    <span className="text-muted-foreground text-xs font-mono mb-1">
+                      {isFiltered ? 'SIN RESULTADOS' : empty.label}
+                    </span>
+                    <span className="text-muted-foreground/60 text-[10px]">
+                      {isFiltered ? 'Hay filtros activos' : empty.sub}
+                    </span>
                   </div>
                 )}
               </div>

@@ -4,7 +4,7 @@ import { useTasks } from '@/lib/task-context';
 import { useAuth } from '@/lib/auth-context';
 import { Task, COLUMNS } from '@/lib/types';
 import { TaskCard } from './ui/task-card';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 import { X, Search, Eye, EyeOff, Grid3X3, List, Star } from 'lucide-react';
@@ -201,19 +201,48 @@ export function KanbanBoard() {
     ? state.tasks.filter(t => t.status === 'activa' && t.person.toLowerCase() === personFilter.toLowerCase())
     : state.tasks;
 
+  // Una sola pasada de filter+sort por columna y por cambio real de datos o
+  // filtros, en vez de recalcular todo en cada render (poll de 5s incluido).
+  const tasksByColumn = useMemo(() => {
+    const out: Record<string, Task[]> = {};
+    for (const col of COLUMNS) {
+      out[col.id] = getSortedTasks(
+        state.tasks, col.id, personFilter, searchQuery,
+        priorityFilter, starredFilter, creatorFilter, user?.id,
+      );
+    }
+    return out;
+  }, [state.tasks, personFilter, searchQuery, priorityFilter, starredFilter, creatorFilter, user?.id]);
+
+  // Los contadores salen del mismo memo: antes eran 3 pasadas extra de
+  // filter+sort completas de las que solo se usaba el .length.
   const columnCounts = COLUMNS.reduce((acc, col) => {
-    acc[col.id] = getSortedTasks(state.tasks, col.id, personFilter, searchQuery, priorityFilter, starredFilter, creatorFilter, user?.id).length;
+    acc[col.id] = (tasksByColumn[col.id] ?? []).length;
     return acc;
   }, {} as Record<string, number>);
 
-  const onComplete = (id: number) => dispatch({ type: 'COMPLETE_TASK', payload: { id }, source: 'UI' });
-  const onDelete = (id: number) => dispatch({ type: 'DELETE_TASK', payload: { id }, source: 'UI' });
-  const onUpdate = (id: number, data: Partial<Task>) => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: data }, source: 'UI' });
-  const onDuplicate = (task: Task) => dispatch({
+  // Cuantos filtros hay puestos, para poder avisarlo y limpiarlos de una.
+  const activeFilterCount =
+    (personFilter ? 1 : 0) + (searchQuery ? 1 : 0) +
+    (priorityFilter ? 1 : 0) + (starredFilter ? 1 : 0);
+
+  const clearFilters = useCallback(() => {
+    setPersonFilter('');
+    setSearchQuery('');
+    setPriorityFilter('');
+    setStarredFilter(false);
+  }, []);
+
+  // useCallback para que las tarjetas memoizadas (React.memo en TaskCard) no
+  // reciban props nuevas en cada render del tablero.
+  const onComplete = useCallback((id: number) => dispatch({ type: 'COMPLETE_TASK', payload: { id }, source: 'UI' }), [dispatch]);
+  const onDelete = useCallback((id: number) => dispatch({ type: 'DELETE_TASK', payload: { id }, source: 'UI' }), [dispatch]);
+  const onUpdate = useCallback((id: number, data: Partial<Task>) => dispatch({ type: 'UPDATE_TASK', payload: { id, updates: data }, source: 'UI' }), [dispatch]);
+  const onDuplicate = useCallback((task: Task) => dispatch({
     type: 'ADD_TASK',
     payload: { text: task.text, date: task.date, person: task.person, type: task.type, urgent: task.urgent, status: 'activa' },
     source: 'UI',
-  });
+  }), [dispatch]);
 
   return (
     <DndContext
@@ -239,6 +268,21 @@ export function KanbanBoard() {
             onClick={() => setSearchQuery('')}
           >
             <X className="w-3 h-3" />
+          </Button>
+        )}
+
+        {activeFilterCount > 0 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 ml-1 text-[10px] font-mono uppercase flex-shrink-0 border border-border"
+            onClick={clearFilters}
+            title="Quitar todos los filtros activos"
+            aria-label="Quitar todos los filtros activos"
+            data-testid="btn-clear-filters"
+          >
+            <X className="w-3 h-3 mr-1" />
+            {activeFilterCount} filtro{activeFilterCount === 1 ? '' : 's'}
           </Button>
         )}
 
@@ -372,13 +416,16 @@ export function KanbanBoard() {
       )}
 
       {/* Mobile Tab Bar */}
-      <div className="flex md:hidden border-b border-border bg-background sticky top-0 z-20" data-testid="mobile-tab-bar">
+      <div role="tablist" aria-label="Columnas del tablero" className="flex md:hidden border-b border-border bg-background sticky top-0 z-20" data-testid="mobile-tab-bar">
         {COLUMNS.map(col => {
           const colors = TAB_COLORS[col.id as keyof typeof TAB_COLORS];
           const isActive = mobileTab === col.id;
           return (
             <button
               key={col.id}
+              role="tab"
+              aria-selected={isActive}
+              aria-label={`${col.title}: ${columnCounts[col.id]} tareas`}
               data-testid={`tab-${col.id}`}
               onClick={() => setMobileTab(col.id)}
               className={cn(
@@ -408,7 +455,8 @@ export function KanbanBoard() {
             key={col.id}
             id={col.id}
             title={col.title}
-            tasks={getSortedTasks(state.tasks, col.id, personFilter, searchQuery, priorityFilter, starredFilter, creatorFilter, user?.id)}
+            tasks={tasksByColumn[col.id] ?? []}
+            isFiltered={activeFilterCount > 0}
             color={col.color as any}
             isLoading={state.isLoading}
             onComplete={onComplete}
@@ -426,7 +474,8 @@ export function KanbanBoard() {
             key={col.id}
             id={col.id}
             title={col.title}
-            tasks={getSortedTasks(state.tasks, col.id, personFilter, searchQuery, priorityFilter, starredFilter, creatorFilter, user?.id)}
+            tasks={tasksByColumn[col.id] ?? []}
+            isFiltered={activeFilterCount > 0}
             color={col.color as any}
             isLoading={state.isLoading}
             onComplete={onComplete}

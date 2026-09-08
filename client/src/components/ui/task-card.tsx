@@ -7,7 +7,8 @@ import { Check, Trash2, ArrowRightLeft, Pencil, CalendarIcon, ChevronRight, Grip
 import { TaskHistoryDialog } from "@/components/task-history-dialog";
 import { Task } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { useState } from 'react';
+import { parseDateStr, formatDate, advanceDays, isOverdue, isToday } from "@/lib/date-utils";
+import { useState, memo } from 'react';
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth-context";
@@ -29,57 +30,11 @@ interface TaskCardProps {
   onDuplicate?: (task: Task) => void;
 }
 
-function parseDateStr(dateStr: string): Date | undefined {
-  if (!dateStr || dateStr === 'a definir') return undefined;
-  const parts = dateStr.split('/');
-  if (parts.length === 3) {
-    const day = parseInt(parts[0], 10);
-    const month = parseInt(parts[1], 10) - 1;
-    let year = parseInt(parts[2], 10);
-    if (year < 100) year += 2000;
-    return new Date(year, month, day);
-  }
-  return undefined;
-}
 
-function formatDate(date: Date): string {
-  const d = String(date.getDate()).padStart(2, '0');
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const y = String(date.getFullYear()).slice(-2);
-  return `${d}/${m}/${y}`;
-}
 
-function advanceOneDay(dateStr: string): string {
-  const base = parseDateStr(dateStr);
-  const from = base || new Date();
-  const next = new Date(from);
-  next.setDate(next.getDate() + 1);
-  return formatDate(next);
-}
 
-function advanceSevenDays(dateStr: string): string {
-  const base = parseDateStr(dateStr);
-  const from = base || new Date();
-  const next = new Date(from);
-  next.setDate(next.getDate() + 7);
-  return formatDate(next);
-}
 
-function advanceFourteenDays(dateStr: string): string {
-  const base = parseDateStr(dateStr);
-  const from = base || new Date();
-  const next = new Date(from);
-  next.setDate(next.getDate() + 14);
-  return formatDate(next);
-}
 
-function advanceThirtyDays(dateStr: string): string {
-  const base = parseDateStr(dateStr);
-  const from = base || new Date();
-  const next = new Date(from);
-  next.setDate(next.getDate() + 30);
-  return formatDate(next);
-}
 
 function getColumnForTask(task: Task): string {
   if (task.urgent) return 'urgent';
@@ -99,26 +54,9 @@ interface AppUser {
   active: boolean;
 }
 
-function isOverdue(dateStr: string): boolean {
-  if (!dateStr || dateStr === 'a definir') return false;
-  const d = parseDateStr(dateStr);
-  if (!d) return false;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return d < today;
-}
 
-function isToday(dateStr: string): boolean {
-  if (!dateStr || dateStr === 'a definir') return false;
-  const d = parseDateStr(dateStr);
-  if (!d) return false;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  d.setHours(0, 0, 0, 0);
-  return d.getTime() === today.getTime();
-}
 
-export function TaskCard({ task, onComplete, onDelete, onUpdate, onDuplicate }: TaskCardProps) {
+function TaskCardImpl({ task, onComplete, onDelete, onUpdate, onDuplicate }: TaskCardProps) {
   const {
     attributes,
     listeners,
@@ -154,9 +92,14 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate, onDuplicate }: 
 
   const copyToClipboard = () => {
     const text = `[#${task.id}] ${task.text} — ${task.date} — ${task.person}`;
-    navigator.clipboard.writeText(text).then(() => {
-      toast({ title: "Copiado", description: text, duration: 2000 });
-    });
+    navigator.clipboard?.writeText(text).then(
+      () => toast({ title: "Copiado", description: text, duration: 2000 }),
+      () => toast({
+        title: "No se pudo copiar",
+        description: "El navegador bloqueó el acceso al portapapeles.",
+        variant: "destructive",
+      }),
+    );
   };
 
   return (
@@ -215,7 +158,7 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate, onDuplicate }: 
                   "h-6 w-6 rounded-none",
                   task.starred
                     ? "text-yellow-500 bg-yellow-50 hover:bg-yellow-100 dark:bg-yellow-900"
-                    : "hover:bg-yellow-50 hover:text-yellow-500 opacity-0 group-hover:opacity-100"
+                    : "hover:bg-yellow-50 hover:text-yellow-500 md:opacity-0 md:group-hover:opacity-100"
                 )}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -223,6 +166,7 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate, onDuplicate }: 
                 }}
                 onPointerDown={(e) => e.stopPropagation()}
                 title={task.starred ? "Desmarcar favorita" : "Marcar favorita"}
+                aria-label={task.starred ? "Desmarcar favorita" : "Marcar favorita"}
               >
                 <Star className={cn("h-3 w-3", task.starred && "fill-current")} />
               </Button>
@@ -235,7 +179,7 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate, onDuplicate }: 
                   "h-6 w-6 rounded-none",
                   task.urgent
                     ? "text-orange-500 bg-orange-50 hover:bg-orange-100 dark:bg-orange-950"
-                    : "hover:bg-orange-50 hover:text-orange-500 opacity-0 group-hover:opacity-100"
+                    : "hover:bg-orange-50 hover:text-orange-500 md:opacity-0 md:group-hover:opacity-100"
                 )}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -243,6 +187,7 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate, onDuplicate }: 
                 }}
                 onPointerDown={(e) => e.stopPropagation()}
                 title={task.urgent ? "Quitar urgente" : "Marcar urgente"}
+                aria-label={task.urgent ? "Quitar urgente" : "Marcar urgente"}
                 data-testid={`btn-urgent-${task.id}`}
               >
                 <Zap className="h-3 w-3" />
@@ -254,7 +199,7 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate, onDuplicate }: 
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-6 w-6 rounded-none hover:bg-purple-100 hover:text-purple-700 opacity-0 group-hover:opacity-100"
+                    className="h-6 w-6 rounded-none hover:bg-purple-100 hover:text-purple-700 md:opacity-0 md:group-hover:opacity-100"
                     onClick={(e) => e.stopPropagation()}
                     onPointerDown={(e) => e.stopPropagation()}
                     data-testid={`btn-move-${task.id}`}
@@ -312,11 +257,20 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate, onDuplicate }: 
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6 rounded-none hover:bg-red-100 hover:text-red-700 opacity-0 group-hover:opacity-100"
-                onClick={(e) => { e.stopPropagation(); onDelete(task.id); }}
+                className="h-6 w-6 rounded-none hover:bg-red-100 hover:text-red-700 md:opacity-0 md:group-hover:opacity-100"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(task.id);
+                  toast({
+                    title: `Tarea #${task.id} eliminada`,
+                    description: "Ctrl+Z para deshacer.",
+                    duration: 5000,
+                  });
+                }}
                 onPointerDown={(e) => e.stopPropagation()}
                 data-testid={`btn-delete-${task.id}`}
                 title="Eliminar"
+                aria-label="Eliminar"
               >
                 <Trash2 className="h-3 w-3" />
               </Button>
@@ -387,7 +341,7 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate, onDuplicate }: 
               <p
                 className={cn(
                   "font-sans text-xs leading-snug cursor-text group/intention",
-                  task.intention ? "text-muted-foreground" : "text-muted-foreground/40 italic opacity-0 group-hover:opacity-100 transition-opacity"
+                  task.intention ? "text-muted-foreground" : "text-muted-foreground/40 italic md:opacity-0 md:group-hover:opacity-100 transition-opacity"
                 )}
                 onClick={(e) => { e.stopPropagation(); setIsEditingIntention(true); }}
                 onPointerDown={(e) => e.stopPropagation()}
@@ -424,7 +378,7 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate, onDuplicate }: 
               <p
                 className={cn(
                   "font-sans text-xs leading-snug cursor-text group/nextstep",
-                  task.nextStep ? "text-muted-foreground" : "text-muted-foreground/40 italic opacity-0 group-hover:opacity-100 transition-opacity"
+                  task.nextStep ? "text-muted-foreground" : "text-muted-foreground/40 italic md:opacity-0 md:group-hover:opacity-100 transition-opacity"
                 )}
                 onClick={(e) => { e.stopPropagation(); setIsEditingNextStep(true); }}
                 onPointerDown={(e) => e.stopPropagation()}
@@ -540,10 +494,11 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate, onDuplicate }: 
               className="font-mono text-xs text-muted-foreground hover:text-foreground hover:bg-muted px-1 rounded-none transition-colors flex items-center gap-0.5"
               onClick={(e) => {
                 e.stopPropagation();
-                onUpdate(task.id, { date: advanceOneDay(task.date) });
+                onUpdate(task.id, { date: advanceDays(task.date, 1) });
               }}
               onPointerDown={(e) => e.stopPropagation()}
               title="Mover al día siguiente"
+              aria-label="Mover al día siguiente"
               data-testid={`btn-plus1d-${task.id}`}
             >
               <ChevronRight className="w-3 h-3" />
@@ -555,10 +510,11 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate, onDuplicate }: 
               className="font-mono text-xs text-muted-foreground hover:text-foreground hover:bg-muted px-1 rounded-none transition-colors flex items-center gap-0.5"
               onClick={(e) => {
                 e.stopPropagation();
-                onUpdate(task.id, { date: advanceSevenDays(task.date) });
+                onUpdate(task.id, { date: advanceDays(task.date, 7) });
               }}
               onPointerDown={(e) => e.stopPropagation()}
               title="Mover 7 días adelante"
+              aria-label="Mover 7 días adelante"
               data-testid={`btn-plus7d-${task.id}`}
             >
               <ChevronRight className="w-3 h-3" />
@@ -570,10 +526,11 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate, onDuplicate }: 
               className="font-mono text-xs text-muted-foreground hover:text-foreground hover:bg-muted px-1 rounded-none transition-colors flex items-center gap-0.5"
               onClick={(e) => {
                 e.stopPropagation();
-                onUpdate(task.id, { date: advanceFourteenDays(task.date) });
+                onUpdate(task.id, { date: advanceDays(task.date, 14) });
               }}
               onPointerDown={(e) => e.stopPropagation()}
               title="Mover 14 días adelante"
+              aria-label="Mover 14 días adelante"
               data-testid={`btn-plus14d-${task.id}`}
             >
               <ChevronRight className="w-3 h-3" />
@@ -585,10 +542,11 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate, onDuplicate }: 
               className="font-mono text-xs text-muted-foreground hover:text-foreground hover:bg-muted px-1 rounded-none transition-colors flex items-center gap-0.5"
               onClick={(e) => {
                 e.stopPropagation();
-                onUpdate(task.id, { date: advanceThirtyDays(task.date) });
+                onUpdate(task.id, { date: advanceDays(task.date, 30) });
               }}
               onPointerDown={(e) => e.stopPropagation()}
               title="Mover 30 días adelante"
+              aria-label="Mover 30 días adelante"
               data-testid={`btn-plus30d-${task.id}`}
             >
               <ChevronRight className="w-3 h-3" />
@@ -604,6 +562,7 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate, onDuplicate }: 
               }}
               onPointerDown={(e) => e.stopPropagation()}
               title="Ver historial"
+              aria-label="Ver historial"
               data-testid={`btn-history-${task.id}`}
             >
               <History className="w-3 h-3" />
@@ -619,3 +578,27 @@ export function TaskCard({ task, onComplete, onDelete, onUpdate, onDuplicate }: 
     </div>
   );
 }
+
+/**
+ * Memoizado: el tablero re-renderiza en cada poll (5s) y en cada update
+ * optimista. Sin esto, mover UNA tarea repinta todas las tarjetas visibles.
+ * Se compara por los campos que la tarjeta realmente muestra.
+ */
+export const TaskCard = memo(TaskCardImpl, (prev, next) => {
+  const a = prev.task;
+  const b = next.task;
+  return (
+    a.id === b.id &&
+    a.text === b.text &&
+    a.date === b.date &&
+    a.person === b.person &&
+    a.type === b.type &&
+    a.urgent === b.urgent &&
+    a.status === b.status &&
+    a.priority === b.priority &&
+    a.starred === b.starred &&
+    a.assignedUserId === b.assignedUserId &&
+    a.createdByUserId === b.createdByUserId &&
+    a.updatedAt === b.updatedAt
+  );
+});

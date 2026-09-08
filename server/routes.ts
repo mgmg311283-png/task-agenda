@@ -19,6 +19,15 @@ const parseRateLimit = rateLimit({
   message: { message: "Demasiadas solicitudes. Esperá un minuto." },
 });
 
+// Las escrituras no tenian ningun limite: un cliente en loop (o una pestaña
+// colgada reintentando) podia martillar la base sin freno. El limite es alto
+// a proposito para no molestar al uso normal, incluidas las acciones masivas.
+const writeRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: 240,
+  message: { message: "Demasiadas operaciones seguidas. Esperá un momento." },
+});
+
 function parseTaskDate(dateStr: string): Date | null {
   const formats = ["dd/MM/yy", "dd/MM/yyyy"];
   for (const fmt of formats) {
@@ -56,7 +65,7 @@ export async function registerRoutes(
   });
 
   // Create a task
-  app.post("/api/tasks", requireAuth, async (req, res) => {
+  app.post("/api/tasks", requireAuth, writeRateLimit, async (req, res) => {
     try {
       const scope = getScope(req);
       const parsed = insertTaskSchema.parse(req.body);
@@ -115,7 +124,7 @@ export async function registerRoutes(
   });
 
   // Update a task
-  app.patch("/api/tasks/:id", requireAuth, async (req, res) => {
+  app.patch("/api/tasks/:id", requireAuth, writeRateLimit, async (req, res) => {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
 
@@ -153,7 +162,7 @@ export async function registerRoutes(
   });
 
   // Complete a task
-  app.post("/api/tasks/:id/complete", requireAuth, async (req, res) => {
+  app.post("/api/tasks/:id/complete", requireAuth, writeRateLimit, async (req, res) => {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
 
@@ -178,7 +187,7 @@ export async function registerRoutes(
   });
 
   // Delete a task (soft delete)
-  app.delete("/api/tasks/:id", requireAuth, async (req, res) => {
+  app.delete("/api/tasks/:id", requireAuth, writeRateLimit, async (req, res) => {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
 
@@ -203,8 +212,14 @@ export async function registerRoutes(
   });
 
   // Move expired tasks to today
-  app.post("/api/tasks/move-expired", requireAuth, async (req, res) => {
-    const today = startOfDay(new Date());
+  app.post("/api/tasks/move-expired", requireAuth, writeRateLimit, async (req, res) => {
+    // Igual que push-today: el server esta en UTC y los usuarios en UTC-3, asi
+    // que despues de las 21:00 hora local "hoy" no coincidia. El cliente manda
+    // su propio dia; si no lo manda, se cae al del servidor como antes.
+    const clientToday = typeof req.body?.today === "string"
+      ? parseTaskDate(req.body.today)
+      : null;
+    const today = startOfDay(clientToday ?? new Date());
     const scope = getScope(req);
 
     const activeTasks = await storage.getActiveTasks(scope);
@@ -251,7 +266,7 @@ export async function registerRoutes(
   });
 
   // Move all urgent tasks to action
-  app.post("/api/tasks/urgent-to-action", requireAuth, async (req, res) => {
+  app.post("/api/tasks/urgent-to-action", requireAuth, writeRateLimit, async (req, res) => {
     const scope = getScope(req);
     const activeTasks = await storage.getActiveTasks(scope);
     const changes: { id: number; beforeType: string }[] = [];
@@ -286,7 +301,7 @@ export async function registerRoutes(
   // muestra en verde). Espejo de move-expired: mismo patron de scope, de
   // batchId en el log y de `changes` para que el cliente registre UNA sola
   // entrada de undo en vez de una por tarea.
-  app.post("/api/tasks/push-today", requireAuth, async (req, res) => {
+  app.post("/api/tasks/push-today", requireAuth, writeRateLimit, async (req, res) => {
     // El servidor corre en UTC y los usuarios estan en UTC-3: entre las 21:00
     // y medianoche hora local, `new Date()` aca ya es el dia siguiente. Si el
     // server decidiera solo, moveria un conjunto distinto al que el boton
@@ -370,7 +385,7 @@ export async function registerRoutes(
   // regalarle (ni robarle) tareas a otro por esta via. El admin mantiene
   // el comportamiento de siempre (persona libre, sin assignedUserId ->
   // bandeja "sin asignar").
-  app.post("/api/tasks/import", requireAuth, async (req, res) => {
+  app.post("/api/tasks/import", requireAuth, writeRateLimit, async (req, res) => {
     try {
       const tasksData = req.body.tasks;
       if (!Array.isArray(tasksData) || tasksData.length === 0) {
@@ -428,7 +443,9 @@ export async function registerRoutes(
   // ---- LOGS ----
 
   app.get("/api/logs", requireAuth, async (req, res) => {
-    const limit = parseInt(req.query.limit as string) || 200;
+    // Clamp: sin esto, ?limit=999999 traia la tabla de logs completa.
+    const raw = parseInt(req.query.limit as string);
+    const limit = Number.isFinite(raw) ? Math.min(Math.max(raw, 1), 1000) : 200;
     const logEntries = await storage.getLogs(limit, getScope(req));
     res.json(logEntries);
   });
