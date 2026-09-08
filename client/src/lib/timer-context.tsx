@@ -68,6 +68,8 @@ export function TimerProvider({ children }: { children: ReactNode }) {
   const invalidate = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['/api/timer/current'] });
     queryClient.invalidateQueries({ queryKey: ['/api/time/summary'] });
+    // Refresca el total del dia de los atajos al parar/cambiar el cronometro.
+    queryClient.invalidateQueries({ queryKey: ['/api/quick-tasks'] });
   }, [queryClient]);
 
   const startMutation = useMutation({

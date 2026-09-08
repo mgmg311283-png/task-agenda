@@ -1,6 +1,7 @@
 import { ChatInterface } from "@/components/chat-interface";
 import { KanbanBoard } from "@/components/kanban-board";
 import { TopBar } from "@/components/top-bar";
+import { QuickTaskBar } from "@/components/quick-task-bar";
 import { useTasks } from "@/lib/task-context";
 import { useEffect, useState } from "react";
 import { toast } from "@/hooks/use-toast";
@@ -64,6 +65,7 @@ export function Dashboard() {
   return (
     <div className="flex flex-col h-screen bg-background text-foreground font-sans">
       <TopBar />
+      <QuickTaskBar />
       <main className="flex-1 overflow-hidden relative">
         <KanbanBoard />
       </main>

@@ -35,6 +35,11 @@ export const tasks = pgTable("tasks", {
   // Ambos opcionales, texto libre. No se validan contra ningun enum.
   intention: text("intention"),
   nextStep: text("next_step"),
+  // Atajo de la barra superior (1,2,3); NULL = tarea normal. Un atajo ES una
+  // tarea para poder reusar el cronometro tal cual (time_entries.task_id es
+  // NOT NULL y apunta aca), pero se esconde del tablero: es una categoria
+  // recurrente ("Interrupciones") que nunca se completa, no trabajo a triar.
+  quickSlot: integer("quick_slot"),
   // `person` es texto libre historico y sirve de display. La autoridad para
   // permisos es assignedUserId — nunca filtrar permisos por `person`.
   assignedUserId: integer("assigned_user_id"),
@@ -93,6 +98,9 @@ export const insertTaskSchema = createInsertSchema(tasks).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+  // No se setea desde la API: los atajos se definen por migracion, si no
+  // cualquier alta comun podria robarse un boton de la barra.
+  quickSlot: true,
 }).extend({
   text: z.string().trim().min(1, "El texto de la tarea es requerido").max(500, "Máximo 500 caracteres"),
   date: z.string().optional().default("a definir"),
@@ -107,6 +115,7 @@ export const updateTaskSchema = createInsertSchema(tasks).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+  quickSlot: true,
 }).partial().extend({
   text: z.string().min(1).max(500).optional(),
   priority: z.enum(['baja', 'normal', 'alta']).optional(),

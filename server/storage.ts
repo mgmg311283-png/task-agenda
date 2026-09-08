@@ -47,6 +47,16 @@ function scopeWhere(scope: Scope) {
  * (arrastrandola, o con la accion masiva "urgentes a accion") tiene que poder
  * dejarla en a_definir sin que esto la vuelva a marcar como urgente.
  */
+/**
+ * Los atajos de la barra superior no son trabajo a triar: se excluyen de todo
+ * listado de tareas. Si aparecieran en el tablero quedarian para siempre en
+ * una columna sin completarse nunca (y encima en URGENTE, por la regla de
+ * abajo). Se manejan solo por /api/quick-tasks.
+ */
+function noEsAtajo() {
+  return isNull(tasks.quickSlot);
+}
+
 function urgentePorDefectoSiNoSeClasifico<T extends Partial<InsertTask>>(task: T): T {
   const sinTipo = !task.type || task.type === "a_definir";
   const sinUrgencia = !task.urgent;
@@ -56,14 +66,15 @@ function urgentePorDefectoSiNoSeClasifico<T extends Partial<InsertTask>>(task: T
 export class DatabaseStorage {
   // ── Tareas ─────────────────────────────────────────────────────────────
   async getActiveTasks(scope: Scope): Promise<Task[]> {
-    const base = eq(tasks.status, "activa");
+    const base = and(eq(tasks.status, "activa"), noEsAtajo());
     const s = scopeWhere(scope);
     return db.select().from(tasks).where(s ? and(base, s) : base);
   }
 
   async getAllTasks(scope: Scope): Promise<Task[]> {
+    const base = noEsAtajo();
     const s = scopeWhere(scope);
-    return s ? db.select().from(tasks).where(s) : db.select().from(tasks);
+    return db.select().from(tasks).where(s ? and(base, s) : base);
   }
 
   async getTaskById(id: number): Promise<Task | undefined> {
@@ -220,6 +231,48 @@ export class DatabaseStorage {
       .where(and(eq(timeEntries.id, id), eq(timeEntries.userId, userId)))
       .returning();
     return rows.length > 0;
+  }
+
+  /**
+   * Los atajos son compartidos y no estan asignados a nadie, asi que
+   * getTaskForScope los ocultaria a todos menos al admin. Esta via aparte
+   * existe para que cualquiera pueda cronometrarlos, SIN ampliar el scope
+   * general (editarlos o borrarlos sigue requiriendo ser admin).
+   */
+  async getQuickTasks(): Promise<Task[]> {
+    return db.select().from(tasks)
+      .where(and(sql`${tasks.quickSlot} IS NOT NULL`, eq(tasks.status, "activa")))
+      .orderBy(asc(tasks.quickSlot));
+  }
+
+  async getQuickTaskById(id: number): Promise<Task | undefined> {
+    const rows = await db.select().from(tasks)
+      .where(and(eq(tasks.id, id), sql`${tasks.quickSlot} IS NOT NULL`))
+      .limit(1);
+    return rows[0];
+  }
+
+  /**
+   * Segundos acumulados HOY por atajo, contando solo entradas ya cerradas.
+   * La sesion en curso se deja afuera a proposito: el cliente le suma su
+   * cronometro en vivo, y si tambien viniera sumada desde aca se contaria dos
+   * veces. Se agrupa por dia LOCAL (igual que getTimeSummary).
+   */
+  async getQuickTaskTotalsToday(userId: number, tz: string): Promise<Record<number, number>> {
+    const r = await db.execute(sql`
+      SELECT te.task_id,
+             SUM(EXTRACT(EPOCH FROM (te.ended_at - te.started_at)))::bigint AS seconds
+      FROM time_entries te
+      JOIN tasks t ON t.id = te.task_id
+      WHERE te.user_id = ${userId}
+        AND t.quick_slot IS NOT NULL
+        AND te.ended_at IS NOT NULL
+        AND (te.started_at AT TIME ZONE ${tz})::date = (now() AT TIME ZONE ${tz})::date
+      GROUP BY te.task_id
+    `);
+    const out: Record<number, number> = {};
+    for (const row of r.rows as any[]) out[Number(row.task_id)] = Number(row.seconds) || 0;
+    return out;
   }
 
   async getEntriesForTask(taskId: number, userId: number): Promise<TimeEntry[]> {

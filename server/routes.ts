@@ -480,8 +480,12 @@ export async function registerRoutes(
 
     const scope = getScope(req);
     // Mismo criterio que el resto: 404 si no es visible para este usuario,
-    // para no revelar la existencia de tareas ajenas.
-    const task = await storage.getTaskForScope(id, scope);
+    // para no revelar la existencia de tareas ajenas. Los atajos de la barra
+    // son la excepcion: no estan asignados a nadie (los comparte todo el
+    // mundo), asi que se resuelven por su propia via en vez de ampliar el
+    // scope general, que tambien habilitaria editarlos y borrarlos.
+    const task = (await storage.getTaskForScope(id, scope))
+      ?? (await storage.getQuickTaskById(id));
     if (!task) return res.status(404).json({ message: "Task not found" });
 
     const { started, stopped } = await storage.startTimer(id, scope.userId, req.body?.source || "UI");
@@ -535,6 +539,27 @@ export async function registerRoutes(
     const ok = await storage.deleteTimeEntry(id, scope.userId);
     if (!ok) return res.status(404).json({ message: "Entry not found" });
     res.json({ deleted: true });
+  });
+
+  // Los tres atajos + cuanto lleva hoy el usuario en cada uno.
+  app.get("/api/quick-tasks", requireAuth, async (req, res) => {
+    const scope = getScope(req);
+    const rawTz = typeof req.query.tz === "string" ? req.query.tz : "UTC";
+    const tz = /^[A-Za-z_\/+-]{1,64}$/.test(rawTz) ? rawTz : "UTC";
+    try {
+      const [quick, totals] = await Promise.all([
+        storage.getQuickTasks(),
+        storage.getQuickTaskTotalsToday(scope.userId, tz),
+      ]);
+      res.json(quick.map((t) => ({
+        id: t.id,
+        text: t.text,
+        quickSlot: t.quickSlot,
+        todaySeconds: totals[t.id] ?? 0,
+      })));
+    } catch (e: any) {
+      res.status(400).json({ message: e.message });
+    }
   });
 
   app.get("/api/time/summary", requireAuth, async (req, res) => {

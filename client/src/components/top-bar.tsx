@@ -11,6 +11,7 @@ import { isTaskOverdue } from "@/lib/parser";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import { useTimer, ElapsedLabel } from "@/lib/timer-context";
+import { useQuickTasks } from "@/lib/quick-tasks";
 import {
   Dialog,
   DialogContent,
@@ -26,7 +27,14 @@ import { format } from "date-fns";
 export function TopBar() {
   const { state, dispatch, moveExpiredAsync, moveUrgentToActionAsync, importAsync, undo, redo, canUndo, canRedo } = useTasks();
   const { running, isBusy, toggle } = useTimer();
-  const runningTask = running ? state.tasks.find(t => t.id === running.taskId) : undefined;
+  // Los atajos de la barra rapida no viven en state.tasks (se excluyen del
+  // tablero a proposito), asi que sin este fallback el indicador de "corriendo"
+  // mostraba "#429" en vez de "Contestar mails".
+  const { data: atajos = [] } = useQuickTasks();
+  const runningLabel = running
+    ? (state.tasks.find(t => t.id === running.taskId)?.text
+       ?? atajos.find(a => a.id === running.taskId)?.text)
+    : undefined;
   const { user, logout } = useAuth();
   const isAdmin = user?.role === "admin";
   const [csvContent, setCsvContent] = useState("");
@@ -312,14 +320,14 @@ export function TopBar() {
               onClick={() => toggle(running.taskId)}
               disabled={isBusy}
               className="flex items-center gap-1.5 text-[10px] font-mono px-2 py-0.5 rounded border border-green-500/40 bg-green-50 text-green-800 dark:bg-green-950 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900 transition-colors max-w-[220px]"
-              title={runningTask ? `Detener: ${runningTask.text}` : 'Detener cronómetro'}
+              title={runningLabel ? `Detener: ${runningLabel}` : 'Detener cronómetro'}
               aria-label="Detener el cronómetro en curso"
               data-testid="btn-timer-running"
             >
               <span className="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse shrink-0" />
               <ElapsedLabel className="tabular-nums font-bold shrink-0" />
               <span className="truncate opacity-80">
-                {runningTask ? runningTask.text : `#${running.taskId}`}
+                {runningLabel ?? `#${running.taskId}`}
               </span>
             </button>
           )}
