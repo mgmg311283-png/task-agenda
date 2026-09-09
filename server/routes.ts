@@ -313,8 +313,9 @@ export async function registerRoutes(
     res.json({ moved: changes.length, changes });
   });
 
-  // Pasa a mañana todas las tareas activas que vencen HOY (las que la UI
-  // muestra en verde). Espejo de move-expired: mismo patron de scope, de
+  // Pasa a mañana las tareas URGENTES que vencen HOY (las que la UI
+  // muestra en verde en esa columna). Accion y Para pensar quedan como estan
+  // a proposito. Espejo de move-expired: mismo patron de scope, de
   // batchId en el log y de `changes` para que el cliente registre UNA sola
   // entrada de undo en vez de una por tarea.
   app.post("/api/tasks/push-today", requireAuth, writeRateLimit, async (req, res) => {
@@ -334,6 +335,7 @@ export async function registerRoutes(
 
     const byTargetPush = new Map<string, number[]>();
     for (const task of activeTasks) {
+      if (task.urgent !== true) continue;
       if (task.date === "a definir") continue;
       const taskDate = parseTaskDate(task.date);
       if (!taskDate || !isSameDay(taskDate, today)) continue;
