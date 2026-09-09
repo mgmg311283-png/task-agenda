@@ -4,6 +4,7 @@ import pg from "pg";
 import {
   tasks, logs, users, timeEntries,
   type Task, type InsertTask, type UpdateTask,
+  type InsertQuickTask, type UpdateQuickTask,
   type LogEntry, type InsertLog,
   type User, type InsertUser, type TimeEntry,
 } from "@shared/schema";
@@ -250,6 +251,64 @@ export class DatabaseStorage {
       .where(and(eq(tasks.id, id), sql`${tasks.quickSlot} IS NOT NULL`))
       .limit(1);
     return rows[0];
+  }
+
+  /**
+   * Primer numero de slot libre entre los atajos ACTIVOS: reusa el hueco que
+   * deja uno borrado en vez de crecer para siempre (1,2,3 -> se borra el 2 ->
+   * el proximo alta vuelve a ocupar el 2). Un atajo eliminado (status
+   * "eliminada") no cuenta como ocupado: su fila sigue viva por las
+   * time_entries historicas, pero su numero queda libre para reasignar.
+   */
+  private async nextFreeQuickSlot(): Promise<number> {
+    const rows = await db.select({ slot: tasks.quickSlot }).from(tasks)
+      .where(and(sql`${tasks.quickSlot} IS NOT NULL`, eq(tasks.status, "activa")));
+    const used = new Set(rows.map((r) => r.slot as number));
+    let slot = 1;
+    while (used.has(slot)) slot++;
+    return slot;
+  }
+
+  async createQuickTask(input: InsertQuickTask, createdByUserId: number): Promise<Task> {
+    const quickSlot = await this.nextFreeQuickSlot();
+    const result = await db.insert(tasks).values({
+      text: input.text,
+      icon: input.icon,
+      quickSlot,
+      createdByUserId,
+      // Un atajo no es trabajo a triar: queda fuera de urgentePorDefectoSiNoSeClasifico
+      // a proposito (no pasa por createTask) y sin persona/fecha reales.
+      date: "a definir",
+      person: "a definir",
+      type: "a_definir",
+      urgent: false,
+      status: "activa",
+    }).returning();
+    return result[0];
+  }
+
+  /** Solo toca texto/icono: quickSlot y el resto de los campos de tarea quedan intocados. */
+  async updateQuickTask(id: number, updates: UpdateQuickTask): Promise<Task | undefined> {
+    const result = await db.update(tasks)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(and(eq(tasks.id, id), sql`${tasks.quickSlot} IS NOT NULL`))
+      .returning();
+    return result[0];
+  }
+
+  /**
+   * Baja logica: igual que deleteTask (status "eliminada"), pero sin tocar
+   * quickSlot. Nunca se borra la fila -> las time_entries historicas (FK NOT
+   * NULL a tasks) siguen resolviendo texto/nombre en los reportes de
+   * Metricas. getQuickTasks ya filtra por status "activa", asi que deja de
+   * aparecer en la barra apenas se guarda esto.
+   */
+  async deactivateQuickTask(id: number): Promise<Task | undefined> {
+    const result = await db.update(tasks)
+      .set({ status: "eliminada", updatedAt: new Date() })
+      .where(and(eq(tasks.id, id), sql`${tasks.quickSlot} IS NOT NULL`))
+      .returning();
+    return result[0];
   }
 
   /**

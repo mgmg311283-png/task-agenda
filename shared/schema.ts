@@ -35,11 +35,15 @@ export const tasks = pgTable("tasks", {
   // Ambos opcionales, texto libre. No se validan contra ningun enum.
   intention: text("intention"),
   nextStep: text("next_step"),
-  // Atajo de la barra superior (1,2,3); NULL = tarea normal. Un atajo ES una
-  // tarea para poder reusar el cronometro tal cual (time_entries.task_id es
-  // NOT NULL y apunta aca), pero se esconde del tablero: es una categoria
+  // Atajo de la barra superior (1,2,3,...); NULL = tarea normal. Un atajo ES
+  // una tarea para poder reusar el cronometro tal cual (time_entries.task_id
+  // es NOT NULL y apunta aca), pero se esconde del tablero: es una categoria
   // recurrente ("Interrupciones") que nunca se completa, no trabajo a triar.
   quickSlot: integer("quick_slot"),
+  // Nombre de icono lucide-react (ej "Mail") para los atajos editables desde
+  // la UI. NULL en tareas normales, y tambien en atajos viejos antes del
+  // backfill de la migracion — el cliente cae a un icono generico en ese caso.
+  icon: text("icon"),
   // `person` es texto libre historico y sirve de display. La autoridad para
   // permisos es assignedUserId — nunca filtrar permisos por `person`.
   assignedUserId: integer("assigned_user_id"),
@@ -98,9 +102,11 @@ export const insertTaskSchema = createInsertSchema(tasks).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
-  // No se setea desde la API: los atajos se definen por migracion, si no
-  // cualquier alta comun podria robarse un boton de la barra.
+  // No se setea desde la API: los atajos se dan de alta por los endpoints
+  // dedicados de /api/quick-tasks, si no cualquier alta comun podria
+  // robarse un boton de la barra (o crear infinitos atajos).
   quickSlot: true,
+  icon: true,
 }).extend({
   text: z.string().trim().min(1, "El texto de la tarea es requerido").max(500, "Máximo 500 caracteres"),
   date: z.string().optional().default("a definir"),
@@ -116,12 +122,35 @@ export const updateTaskSchema = createInsertSchema(tasks).omit({
   createdAt: true,
   updatedAt: true,
   quickSlot: true,
+  icon: true,
 }).partial().extend({
   text: z.string().min(1).max(500).optional(),
   priority: z.enum(['baja', 'normal', 'alta']).optional(),
   starred: z.boolean().optional(),
   intention: z.string().max(1000).optional(),
   nextStep: z.string().max(1000).optional(),
+});
+
+// Set fijo y chico a proposito: son los unicos nombres de icono lucide-react
+// que el cliente sabe dibujar (ver ICON_MAP en quick-task-bar.tsx). Server y
+// cliente comparten esta lista para no poder guardar un nombre que no
+// resuelva a ningun componente.
+export const QUICK_TASK_ICON_NAMES = [
+  "Mail", "MessageCircle", "Zap", "Bot", "Mic", "Terminal",
+  "Users", "Settings", "AlertCircle", "TrendingUp", "CalendarClock", "History", "Star",
+] as const;
+export type QuickTaskIconName = typeof QUICK_TASK_ICON_NAMES[number];
+
+export const insertQuickTaskSchema = z.object({
+  text: z.string().trim().min(1, "El texto es requerido").max(60, "Máximo 60 caracteres"),
+  icon: z.enum(QUICK_TASK_ICON_NAMES),
+});
+
+export const updateQuickTaskSchema = z.object({
+  text: z.string().trim().min(1, "El texto es requerido").max(60, "Máximo 60 caracteres").optional(),
+  icon: z.enum(QUICK_TASK_ICON_NAMES).optional(),
+}).refine((data) => data.text !== undefined || data.icon !== undefined, {
+  message: "Nada para actualizar",
 });
 
 export const insertLogSchema = createInsertSchema(logs).omit({
@@ -145,5 +174,7 @@ export type UserRole = "admin" | "supervisor" | "operario";
 export type Task = typeof tasks.$inferSelect;
 export type InsertTask = z.infer<typeof insertTaskSchema>;
 export type UpdateTask = z.infer<typeof updateTaskSchema>;
+export type InsertQuickTask = z.infer<typeof insertQuickTaskSchema>;
+export type UpdateQuickTask = z.infer<typeof updateQuickTaskSchema>;
 export type LogEntry = typeof logs.$inferSelect;
 export type InsertLog = z.infer<typeof insertLogSchema>;

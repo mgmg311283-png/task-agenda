@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { storage } from "./storage";
 import { requireAuth, requireAdmin, getScope } from "./auth";
 import { diffLog, describeAction } from "./audit";
-import { insertTaskSchema, updateTaskSchema } from "@shared/schema";
+import { insertTaskSchema, updateTaskSchema, insertQuickTaskSchema, updateQuickTaskSchema } from "@shared/schema";
 import { parse, isValid, isBefore, startOfDay, format, addDays, isSameDay } from "date-fns";
 import OpenAI from "openai";
 import rateLimit from "express-rate-limit";
@@ -556,12 +556,94 @@ export async function registerRoutes(
       res.json(quick.map((t) => ({
         id: t.id,
         text: t.text,
+        icon: t.icon,
         quickSlot: t.quickSlot,
         todaySeconds: totals[t.id] ?? 0,
       })));
     } catch (e: any) {
       res.status(400).json({ message: e.message });
     }
+  });
+
+  // CRUD de los atajos en si (crear/renombrar/cambiar icono/dar de baja).
+  // Admin-only, igual que el resto de lo compartido/sin dueño (ver el
+  // comentario en storage.getQuickTasks): cualquiera puede CRONOMETRARLOS
+  // via /api/tasks/:id/timer/start, pero definir que atajos existen es
+  // administracion, no uso diario. Endpoints separados de /api/tasks a
+  // proposito, para que insertTaskSchema/updateTaskSchema (que ni siquiera
+  // aceptan quickSlot) no puedan usarse para crear atajos sin querer.
+  app.post("/api/quick-tasks", requireAdmin, writeRateLimit, async (req, res) => {
+    try {
+      const scope = getScope(req);
+      const parsed = insertQuickTaskSchema.parse(req.body);
+      const task = await storage.createQuickTask(parsed, scope.userId);
+
+      await storage.createLog({
+        action: "CREATE",
+        details: `Creado atajo #${task.id}: "${task.text}"`,
+        taskId: task.id,
+        userId: scope.userId,
+        newValues: JSON.stringify(task),
+        source: "UI",
+      });
+
+      res.status(201).json(task);
+    } catch (e: any) {
+      res.status(400).json({ message: e.message });
+    }
+  });
+
+  app.patch("/api/quick-tasks/:id", requireAdmin, writeRateLimit, async (req, res) => {
+    const id = parseInt(String(req.params.id));
+    if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+
+    try {
+      const scope = getScope(req);
+      const original = await storage.getQuickTaskById(id);
+      if (!original) return res.status(404).json({ message: "Atajo no encontrado" });
+
+      const parsed = updateQuickTaskSchema.parse(req.body);
+      const task = await storage.updateQuickTask(id, parsed);
+
+      await storage.createLog({
+        action: "UPDATE",
+        details: `Editado atajo #${id}`,
+        taskId: id,
+        userId: scope.userId,
+        originalValues: JSON.stringify(original),
+        newValues: JSON.stringify(task),
+        source: "UI",
+      });
+
+      res.json(task);
+    } catch (e: any) {
+      res.status(400).json({ message: e.message });
+    }
+  });
+
+  // Baja logica (nunca se borra la fila: las time_entries historicas la
+  // necesitan para resolver texto en los reportes de Metricas).
+  app.delete("/api/quick-tasks/:id", requireAdmin, writeRateLimit, async (req, res) => {
+    const id = parseInt(String(req.params.id));
+    if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+
+    const scope = getScope(req);
+    const original = await storage.getQuickTaskById(id);
+    if (!original) return res.status(404).json({ message: "Atajo no encontrado" });
+
+    const task = await storage.deactivateQuickTask(id);
+
+    await storage.createLog({
+      action: "DELETE",
+      details: `Desactivado atajo #${id}: "${original.text}"`,
+      taskId: id,
+      userId: scope.userId,
+      originalValues: JSON.stringify(original),
+      newValues: JSON.stringify(task),
+      source: "UI",
+    });
+
+    res.json(task);
   });
 
   app.get("/api/time/summary", requireAuth, async (req, res) => {

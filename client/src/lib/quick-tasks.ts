@@ -1,8 +1,11 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiRequest } from './queryClient';
+import type { QuickTaskIconName } from '@shared/schema';
 
 export interface QuickTask {
   id: number;
   text: string;
+  icon: QuickTaskIconName | null;
   quickSlot: number;
   /** Segundos de HOY ya cerrados. No incluye la sesion en curso: esa la suma
    *  el cliente con el cronometro en vivo, para no contarla dos veces. */
@@ -35,4 +38,36 @@ export function useQuickTasks() {
     },
     staleTime: 30_000,
   });
+}
+
+/** CRUD de los atajos en si (no del cronometro). Admin-only en el servidor. */
+export function useQuickTaskAdmin() {
+  const queryClient = useQueryClient();
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['/api/quick-tasks'] });
+
+  const create = useMutation({
+    mutationFn: async (input: { text: string; icon: QuickTaskIconName }) => {
+      const res = await apiRequest('POST', '/api/quick-tasks', input);
+      return res.json() as Promise<QuickTask>;
+    },
+    onSuccess: invalidate,
+  });
+
+  const update = useMutation({
+    mutationFn: async ({ id, ...input }: { id: number; text?: string; icon?: QuickTaskIconName }) => {
+      const res = await apiRequest('PATCH', `/api/quick-tasks/${id}`, input);
+      return res.json() as Promise<QuickTask>;
+    },
+    onSuccess: invalidate,
+  });
+
+  const deactivate = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await apiRequest('DELETE', `/api/quick-tasks/${id}`);
+      return res.json() as Promise<QuickTask>;
+    },
+    onSuccess: invalidate,
+  });
+
+  return { create, update, deactivate };
 }
