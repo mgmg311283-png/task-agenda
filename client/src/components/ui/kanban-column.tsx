@@ -48,15 +48,18 @@ export function KanbanColumn({ id, title, tasks, color, isLoading, onComplete, o
 
   const empty = EMPTY_MESSAGES[color];
 
-  const todayCount = color === 'urgent' ? tasks.filter(t => isToday(t.date)).length : 0;
+  // Las tareas de hoy son las que la UI pinta en verde. Cada columna cuenta y
+  // pasa SOLO las suyas (`tasks` ya viene filtrada por columna del tablero).
+  const tareasDeHoy = tasks.filter(t => isToday(t.date));
+  const todayCount = tareasDeHoy.length;
 
   const pushTodayToTomorrow = async () => {
     if (todayCount === 0 || isPushing) return;
     setIsPushing(true);
     try {
-      const result = await pushTodayAsync('UI');
+      const result = await pushTodayAsync('UI', color === 'urgent' ? 'urgent' : color === 'action' ? 'action' : 'think', tareasDeHoy.map(t => t.id));
       toast({
-        title: `${result.moved} tarea${result.moved === 1 ? '' : 's'} a mañana`,
+        title: `${result.moved} tarea${result.moved === 1 ? '' : 's'} de ${title} a mañana`,
         description: result.moved > 0 ? `Nueva fecha: ${result.date}` : undefined,
       });
     } catch (err) {
@@ -82,23 +85,21 @@ export function KanbanColumn({ id, title, tasks, color, isLoading, onComplete, o
           {title}
         </h3>
         <div className="flex items-center gap-2">
-          {color === 'urgent' && (
-            <button
-              onClick={pushTodayToTomorrow}
-              disabled={todayCount === 0 || isPushing}
-              className={cn(
-                "flex items-center gap-1 text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full border transition-colors",
-                todayCount === 0 || isPushing
-                  ? "opacity-40 cursor-default border-transparent"
-                  : "bg-black/5 border-black/10 hover:bg-black/10"
-              )}
-              title={todayCount === 0 ? "No hay tareas de hoy" : `Pasar ${todayCount} tarea${todayCount === 1 ? '' : 's'} de hoy a mañana`}
-              data-testid="btn-push-today-to-tomorrow"
-            >
-              <CalendarArrowUp className="w-3 h-3" />
-              {todayCount > 0 && <span>{todayCount}</span>}
-            </button>
-          )}
+          <button
+            onClick={pushTodayToTomorrow}
+            disabled={todayCount === 0 || isPushing}
+            className={cn(
+              "flex items-center gap-1 text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full border transition-colors",
+              todayCount === 0 || isPushing
+                ? "opacity-40 cursor-default border-transparent"
+                : "bg-black/5 border-black/10 hover:bg-black/10"
+            )}
+            title={todayCount === 0 ? "No hay tareas de hoy en esta columna" : `Pasar ${todayCount} tarea${todayCount === 1 ? '' : 's'} de hoy a mañana (solo ${title})`}
+            data-testid={`btn-push-today-to-tomorrow-${color}`}
+          >
+            <CalendarArrowUp className="w-3 h-3" />
+            {todayCount > 0 && <span>{todayCount}</span>}
+          </button>
           <span className="text-xs font-bold opacity-60 bg-black/5 px-2 py-0.5 rounded-full">
             {tasks.length}
           </span>

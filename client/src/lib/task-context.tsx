@@ -17,7 +17,7 @@ interface TaskContextValue {
   dispatch: (action: Action) => void;
   moveExpiredAsync: (source: string) => Promise<{ moved: number; date: string }>;
   moveUrgentToActionAsync: (source: string) => Promise<{ moved: number }>;
-  pushTodayAsync: (source: string) => Promise<{ moved: number; date: string }>;
+  pushTodayAsync: (source: string, column: 'urgent' | 'action' | 'think', ids: number[]) => Promise<{ moved: number; date: string }>;
   importAsync: (tasks: Partial<Task>[], source: string) => Promise<Task[]>;
   undo: () => void;
   redo: () => void;
@@ -179,8 +179,8 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   // de N PATCH desde el cliente: asi es un solo request, una sola entrada de
   // undo (Ctrl+Z deshace el lote completo) y un solo evento agrupado en el log.
   const pushTodayMutation = useMutation({
-    mutationFn: async (data: { source: string; today: string }): Promise<{ moved: number; date: string; changes: { id: number; before: string; after: string }[] }> => {
-      const res = await apiRequest('POST', '/api/tasks/push-today', { source: data.source, today: data.today });
+    mutationFn: async (data: { source: string; today: string; column: string; ids: number[] }): Promise<{ moved: number; date: string; changes: { id: number; before: string; after: string }[] }> => {
+      const res = await apiRequest('POST', '/api/tasks/push-today', { source: data.source, today: data.today, column: data.column, ids: data.ids });
       return res.json();
     },
     meta: { skipGlobalError: true },
@@ -190,9 +190,13 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     },
   });
 
-  const pushTodayAsync = useCallback(async (source: string) => {
+  // `column` limita el pasaje a UNA columna del tablero: cada uno mueve lo
+  // suyo sin tocarle el dia a las tareas de las otras dos.
+  // `ids` son las tareas que el boton conto en pantalla: con filtros activos
+  // el server no debe mover mas que eso.
+  const pushTodayAsync = useCallback(async (source: string, column: 'urgent' | 'action' | 'think', ids: number[]) => {
     // Mandamos el "hoy" del navegador para que el server no use el suyo (UTC).
-    return pushTodayMutation.mutateAsync({ source, today: formatDate(new Date()) });
+    return pushTodayMutation.mutateAsync({ source, today: formatDate(new Date()), column, ids });
   }, [pushTodayMutation]);
 
   const deleteAllMutation = useMutation({

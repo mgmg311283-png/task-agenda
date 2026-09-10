@@ -313,11 +313,15 @@ export async function registerRoutes(
     res.json({ moved: changes.length, changes });
   });
 
-  // Pasa a mañana las tareas URGENTES que vencen HOY (las que la UI
-  // muestra en verde en esa columna). Accion y Para pensar quedan como estan
-  // a proposito. Espejo de move-expired: mismo patron de scope, de
-  // batchId en el log y de `changes` para que el cliente registre UNA sola
-  // entrada de undo en vez de una por tarea.
+  // Pasa a mañana las tareas que vencen HOY (las que la UI muestra en verde)
+  // DE UNA SOLA COLUMNA: cada uno trabaja en la suya y no le mueve el dia a
+  // las otras. La columna viene en el body (`column`), y el default sigue
+  // siendo "urgent" para no cambiarle el significado a ningun llamado viejo.
+  // Los filtros son los MISMOS que usa el tablero en kanban-board.tsx: si
+  // alla cambia como se reparten las tareas, hay que tocarlo aca tambien.
+  // Espejo de move-expired: mismo patron de scope, de batchId en el log y de
+  // `changes` para que el cliente registre UNA sola entrada de undo en vez de
+  // una por tarea.
   app.post("/api/tasks/push-today", requireAuth, writeRateLimit, async (req, res) => {
     // El servidor corre en UTC y los usuarios estan en UTC-3: entre las 21:00
     // y medianoche hora local, `new Date()` aca ya es el dia siguiente. Si el
@@ -330,12 +334,35 @@ export async function registerRoutes(
     const tomorrow = addDays(today, 1);
     const scope = getScope(req);
 
+    // El boton cuenta lo que se VE en pantalla, que con filtros activos
+    // (persona, prioridad, busqueda) es menos que toda la columna. Por eso el
+    // cliente manda los ids que conto: el server mueve la interseccion, nunca
+    // mas de lo que el usuario vio. Los ids no dan permisos — siguen pasando
+    // por scope, columna y fecha de hoy.
+    const idsVistos: number[] | null = Array.isArray(req.body?.ids)
+      ? req.body.ids.filter((n: unknown): n is number => typeof n === "number")
+      : null;
+    const idsVistosSet = idsVistos ? new Set(idsVistos) : null;
+
+    const column = typeof req.body?.column === "string" ? req.body.column : "urgent";
+    if (!["urgent", "action", "think"].includes(column)) {
+      return res.status(400).json({ message: 'column debe ser "urgent", "action" o "think"' });
+    }
+    // "a_definir" cae en ACCION igual que en el tablero: una tarea sin
+    // clasificar se ve ahi, asi que el boton de ahi tiene que alcanzarla.
+    const enColumna = (t: { urgent: boolean | null; type: string | null }) => {
+      if (column === "urgent") return t.urgent === true;
+      if (column === "action") return t.urgent !== true && (t.type === "accion" || t.type === "a_definir");
+      return t.urgent !== true && t.type === "para_pensar";
+    };
+
     const activeTasks = await storage.getActiveTasks(scope);
     const changes: { id: number; before: string; after: string }[] = [];
 
     const byTargetPush = new Map<string, number[]>();
     for (const task of activeTasks) {
-      if (task.urgent !== true) continue;
+      if (idsVistosSet && !idsVistosSet.has(task.id)) continue;
+      if (!enColumna(task)) continue;
       if (task.date === "a definir") continue;
       const taskDate = parseTaskDate(task.date);
       if (!taskDate || !isSameDay(taskDate, today)) continue;
