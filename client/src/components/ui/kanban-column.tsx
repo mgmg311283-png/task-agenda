@@ -4,7 +4,7 @@ import { Task } from '@/lib/types';
 import { TaskCard } from './task-card';
 import { Skeleton } from './skeleton';
 import { cn } from '@/lib/utils';
-import { isToday } from '@/lib/date-utils';
+import { isToday, isOverdue } from '@/lib/date-utils';
 import { useTasks } from '@/lib/task-context';
 import { toast } from '@/hooks/use-toast';
 import { useState } from 'react';
@@ -53,6 +53,11 @@ export function KanbanColumn({ id, title, tasks, color, isLoading, onComplete, o
   const tareasDeHoy = tasks.filter(t => isToday(t.date));
   const todayCount = tareasDeHoy.length;
 
+  // "Listas para hacer" = lo que ya toca: las de hoy MAS las atrasadas. Las
+  // futuras y las "a definir" no cuentan (isOverdue/isToday devuelven false
+  // para "a definir"). Es el numero de la izquierda del badge: listas/total.
+  const listasCount = tasks.filter(t => isToday(t.date) || isOverdue(t.date)).length;
+
   const pushTodayToTomorrow = async () => {
     if (todayCount === 0 || isPushing) return;
     setIsPushing(true);
@@ -100,8 +105,12 @@ export function KanbanColumn({ id, title, tasks, color, isLoading, onComplete, o
             <CalendarArrowUp className="w-3 h-3" />
             {todayCount > 0 && <span>{todayCount}</span>}
           </button>
-          <span className="text-xs font-bold opacity-60 bg-black/5 px-2 py-0.5 rounded-full">
-            {tasks.length}
+          <span
+            className="text-xs font-bold opacity-60 bg-black/5 px-2 py-0.5 rounded-full"
+            title={`${listasCount} lista${listasCount === 1 ? '' : 's'} para hacer (de hoy o atrasadas) de ${tasks.length} en total`}
+            data-testid={`column-count-${color}`}
+          >
+            {listasCount}/{tasks.length}
           </span>
         </div>
       </div>
