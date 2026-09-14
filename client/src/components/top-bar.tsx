@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Download, Upload, Trash, CalendarClock, History, BarChart3, Moon, Sun, AlertTriangle, RotateCcw, RotateCw, Plus, Settings, Zap, Wifi, Presentation, Focus, Users, LogOut } from "lucide-react";
+import { Download, Upload, Trash, CalendarClock, History, BarChart3, Moon, Sun, AlertTriangle, RotateCcw, RotateCw, Plus, Settings, Zap, Wifi, Presentation, Focus, Users, LogOut, Square } from "lucide-react";
 import { useTasks } from "@/lib/task-context";
 import { useAuth } from "@/lib/auth-context";
 import { Link, useLocation } from "wouter";
@@ -26,15 +26,14 @@ import { format } from "date-fns";
 
 export function TopBar() {
   const { state, dispatch, moveExpiredAsync, moveUrgentToActionAsync, importAsync, undo, redo, canUndo, canRedo } = useTasks();
-  const { running, isBusy, toggle } = useTimer();
+  const { running, isBusy, toggle, stopAll } = useTimer();
   // Los atajos de la barra rapida no viven en state.tasks (se excluyen del
   // tablero a proposito), asi que sin este fallback el indicador de "corriendo"
   // mostraba "#429" en vez de "Contestar mails".
   const { data: atajos = [] } = useQuickTasks();
-  const runningLabel = running
-    ? (state.tasks.find(t => t.id === running.taskId)?.text
-       ?? atajos.find(a => a.id === running.taskId)?.text)
-    : undefined;
+  const nombreDeTarea = (taskId: number) =>
+    state.tasks.find(t => t.id === taskId)?.text
+    ?? atajos.find(a => a.id === taskId)?.text;
   const { user, logout } = useAuth();
   const isAdmin = user?.role === "admin";
   const [csvContent, setCsvContent] = useState("");
@@ -312,23 +311,45 @@ export function TopBar() {
             </Button>
           )}
 
-          {/* Cronómetro en curso: la tarjeta activa puede estar scrolleada
-              fuera de pantalla o en otra columna, así que el estado tiene que
-              verse siempre desde acá. */}
-          {running && (
+          {/* Cronómetros en curso: las tarjetas activas pueden estar
+              scrolleadas fuera de pantalla o en otra columna, así que el
+              estado tiene que verse siempre desde acá. Cada chip para SOLO lo
+              suyo; el STOP de al lado para todo junto. */}
+          {running.map(entry => {
+            const label = nombreDeTarea(entry.taskId);
+            return (
+              <button
+                key={entry.id}
+                onClick={() => toggle(entry.taskId)}
+                disabled={isBusy}
+                className="flex items-center gap-1.5 text-[10px] font-mono px-2 py-0.5 rounded border border-green-500/40 bg-green-50 text-green-800 dark:bg-green-950 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900 transition-colors max-w-[220px]"
+                title={label ? `Detener: ${label}` : 'Detener cronómetro'}
+                aria-label={`Detener el cronómetro de ${label ?? `la tarea #${entry.taskId}`}`}
+                data-testid={`btn-timer-running-${entry.taskId}`}
+              >
+                <span className="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse shrink-0" />
+                <ElapsedLabel startedAt={entry.startedAt} className="tabular-nums font-bold shrink-0" />
+                <span className="truncate opacity-80 hidden sm:inline">
+                  {label ?? `#${entry.taskId}`}
+                </span>
+              </button>
+            );
+          })}
+
+          {/* Stop general: un click frena las tres. Aparece siempre que haya
+              algo corriendo, para que parar todo no dependa de acordarse de
+              cuántas hay abiertas. */}
+          {running.length > 0 && (
             <button
-              onClick={() => toggle(running.taskId)}
+              onClick={() => stopAll()}
               disabled={isBusy}
-              className="flex items-center gap-1.5 text-[10px] font-mono px-2 py-0.5 rounded border border-green-500/40 bg-green-50 text-green-800 dark:bg-green-950 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900 transition-colors max-w-[220px]"
-              title={runningLabel ? `Detener: ${runningLabel}` : 'Detener cronómetro'}
-              aria-label="Detener el cronómetro en curso"
-              data-testid="btn-timer-running"
+              className="flex items-center gap-1 text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded border border-red-500/40 bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900 transition-colors shrink-0"
+              title={`Detener ${running.length === 1 ? 'el cronómetro' : `los ${running.length} cronómetros`}`}
+              aria-label="Detener todos los cronómetros"
+              data-testid="btn-timer-stop-all"
             >
-              <span className="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse shrink-0" />
-              <ElapsedLabel className="tabular-nums font-bold shrink-0" />
-              <span className="truncate opacity-80">
-                {runningLabel ?? `#${running.taskId}`}
-              </span>
+              <Square className="w-3 h-3 fill-current" />
+              <span>Stop{running.length > 1 ? ` ${running.length}` : ''}</span>
             </button>
           )}
 

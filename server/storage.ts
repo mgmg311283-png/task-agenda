@@ -18,6 +18,13 @@ export const pool = new pg.Pool({
 export const db = drizzle(pool);
 
 /**
+ * Techo de cronometros simultaneos por persona. Vive aca (y no solo dentro de
+ * la clase) para que las rutas puedan nombrarlo en el mensaje de error sin
+ * importar la clase entera.
+ */
+export const MAX_RUNNING_TIMERS = 3;
+
+/**
  * Filtro de visibilidad. Es la unica autoridad de permisos sobre tareas:
  *  - admin      -> ve todo, incluida la bandeja sin asignar
  *  - supervisor -> ve lo suyo + lo de su equipo
@@ -201,30 +208,78 @@ export class DatabaseStorage {
       ));
   }
 
+  /**
+   * Cuantos cronometros puede tener abiertos una persona a la vez. Antes era
+   * uno solo (arrancar otro cerraba el anterior); el pedido fue poder medir
+   * hasta tres cosas en paralelo, pero con un techo: sin limite, los
+   * cronometros olvidados se acumulan y el reporte de Metricas deja de
+   * significar algo.
+   */
+  static readonly MAX_RUNNING_TIMERS = MAX_RUNNING_TIMERS;
+
+  async getRunningEntries(userId: number): Promise<TimeEntry[]> {
+    await this.autoCloseStale(userId);
+    return db.select().from(timeEntries)
+      .where(and(eq(timeEntries.userId, userId), isNull(timeEntries.endedAt)))
+      .orderBy(asc(timeEntries.startedAt));
+  }
+
+  /** El mas viejo de los que estan corriendo, o undefined. */
   async getRunningEntry(userId: number): Promise<TimeEntry | undefined> {
-    await this.autoCloseStale(userId);
-    const rows = await db.select().from(timeEntries)
-      .where(and(eq(timeEntries.userId, userId), isNull(timeEntries.endedAt)))
-      .limit(1);
-    return rows[0];
+    return (await this.getRunningEntries(userId))[0];
   }
 
-  /** Arranca el cronómetro en una tarea, cerrando el que estuviera corriendo. */
-  async startTimer(taskId: number, userId: number, source = "UI"): Promise<{ started: TimeEntry; stopped?: TimeEntry }> {
-    const stopped = await this.stopTimer(userId);
-    const rows = await db.insert(timeEntries)
-      .values({ taskId, userId, source })
-      .returning();
-    return { started: rows[0], stopped };
+  /**
+   * Arranca el cronometro en una tarea SIN tocar los otros que ya corren,
+   * mientras no se pase de MAX_RUNNING_TIMERS.
+   *
+   * Va en una transaccion con advisory lock por usuario porque el chequeo y
+   * el insert son dos pasos: dos clicks casi simultaneos (o la compu y el
+   * celular a la vez) podian ver "2 corriendo" los dos y dejar 4 abiertos.
+   * El lock es por userId, asi que no serializa a toda la app.
+   */
+  async startTimer(taskId: number, userId: number, source = "UI"): Promise<{
+    started?: TimeEntry;
+    running: TimeEntry[];
+    limitReached?: boolean;
+    already?: boolean;
+  }> {
+    await this.autoCloseStale(userId);
+    return db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(${userId})`);
+
+      const abiertas = await tx.select().from(timeEntries)
+        .where(and(eq(timeEntries.userId, userId), isNull(timeEntries.endedAt)))
+        .orderBy(asc(timeEntries.startedAt));
+
+      // Ya corriendo: devolver la que hay en vez de abrir una segunda entrada
+      // para la misma tarea (sumaria el tiempo dos veces en el reporte).
+      const yaCorre = abiertas.find((e) => e.taskId === taskId);
+      if (yaCorre) return { started: yaCorre, running: abiertas, already: true };
+
+      if (abiertas.length >= DatabaseStorage.MAX_RUNNING_TIMERS) {
+        return { running: abiertas, limitReached: true };
+      }
+
+      const rows = await tx.insert(timeEntries)
+        .values({ taskId, userId, source })
+        .returning();
+      return { started: rows[0], running: [...abiertas, rows[0]] };
+    });
   }
 
-  async stopTimer(userId: number): Promise<TimeEntry | undefined> {
+  /**
+   * Para los cronometros del usuario. Sin `taskId` los para TODOS (es el
+   * "stop general" de la barra de arriba); con `taskId`, solo ese.
+   */
+  async stopTimers(userId: number, taskId?: number): Promise<TimeEntry[]> {
     await this.autoCloseStale(userId);
-    const rows = await db.update(timeEntries)
+    const cond = [eq(timeEntries.userId, userId), isNull(timeEntries.endedAt)];
+    if (typeof taskId === "number") cond.push(eq(timeEntries.taskId, taskId));
+    return db.update(timeEntries)
       .set({ endedAt: new Date() })
-      .where(and(eq(timeEntries.userId, userId), isNull(timeEntries.endedAt)))
+      .where(and(...cond))
       .returning();
-    return rows[0];
   }
 
   async deleteTimeEntry(id: number, userId: number): Promise<boolean> {

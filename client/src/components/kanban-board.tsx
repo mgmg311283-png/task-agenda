@@ -1,6 +1,7 @@
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, KeyboardSensor, PointerSensor, useSensor, useSensors, closestCorners } from '@dnd-kit/core';
 import { KanbanColumn } from './ui/kanban-column';
 import { useTasks } from '@/lib/task-context';
+import { useTimer } from '@/lib/timer-context';
 import { useAuth } from '@/lib/auth-context';
 import { Task, COLUMNS } from '@/lib/types';
 import { TaskCard } from './ui/task-card';
@@ -22,7 +23,7 @@ function parseDateToSortKey(dateStr: string): number {
     return year * 10000 + month * 100 + day;
 }
 
-function getSortedTasks(tasks: Task[], columnId: string, personFilter: string, searchQuery: string = '', priorityFilter: string = '', starredFilter: boolean = false, creatorFilter: 'all' | 'mine' = 'mine', currentUserId?: number | null): Task[] {
+function getSortedTasks(tasks: Task[], columnId: string, personFilter: string, searchQuery: string = '', priorityFilter: string = '', starredFilter: boolean = false, creatorFilter: 'all' | 'mine' = 'mine', currentUserId?: number | null, runningIds: number[] = []): Task[] {
     const colTasks = tasks.filter(t => {
         if (t.status !== 'activa') return false;
         if (personFilter && t.person.toLowerCase() !== personFilter.toLowerCase()) return false;
@@ -51,6 +52,12 @@ function getSortedTasks(tasks: Task[], columnId: string, personFilter: string, s
     });
 
     return colTasks.sort((a, b) => {
+        // Lo que esta corriendo va primero en su columna: es en lo que estas
+        // trabajando ahora, no tiene que quedar scrolleado fuera de pantalla.
+        const runA = runningIds.includes(a.id) ? 0 : 1;
+        const runB = runningIds.includes(b.id) ? 0 : 1;
+        if (runA !== runB) return runA - runB;
+
         const dateA = parseDateToSortKey(a.date);
         const dateB = parseDateToSortKey(b.date);
 
@@ -197,6 +204,16 @@ export function KanbanBoard() {
     return Array.from(set).sort();
   }, [state.tasks]);
 
+  // Ids de lo que esta corriendo, como string estable: `running` es un array
+  // nuevo en cada refetch (cada 30s), y si el memo dependiera del array se
+  // recalcularian las tres columnas al pedo. Solo importa QUE ids son.
+  const { running } = useTimer();
+  const runningKey = running.map(e => e.taskId).sort((a, b) => a - b).join(',');
+  const runningIds = useMemo(
+    () => (runningKey === '' ? [] : runningKey.split(',').map(Number)),
+    [runningKey],
+  );
+
   const filteredTasks = personFilter
     ? state.tasks.filter(t => t.status === 'activa' && t.person.toLowerCase() === personFilter.toLowerCase())
     : state.tasks;
@@ -208,11 +225,11 @@ export function KanbanBoard() {
     for (const col of COLUMNS) {
       out[col.id] = getSortedTasks(
         state.tasks, col.id, personFilter, searchQuery,
-        priorityFilter, starredFilter, creatorFilter, user?.id,
+        priorityFilter, starredFilter, creatorFilter, user?.id, runningIds,
       );
     }
     return out;
-  }, [state.tasks, personFilter, searchQuery, priorityFilter, starredFilter, creatorFilter, user?.id]);
+  }, [state.tasks, personFilter, searchQuery, priorityFilter, starredFilter, creatorFilter, user?.id, runningIds]);
 
   // Los contadores salen del mismo memo: antes eran 3 pasadas extra de
   // filter+sort completas de las que solo se usaba el .length.

@@ -79,8 +79,10 @@ function TaskCardImpl({ task, onComplete, onDelete, onUpdate, onDuplicate }: Tas
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const { user } = useAuth();
-  const { running, isBusy, toggle } = useTimer();
-  const isRunning = running?.taskId === task.id;
+  const { entryFor, isBusy, toggle } = useTimer();
+  // Con varios cronometros a la vez, cada tarjeta mira SU entrada (o null).
+  const entradaEnCurso = entryFor(task.id);
+  const isRunning = !!entradaEnCurso;
   const isAdmin = user?.role === "admin";
   // Solo el admin puede reasignar tareas, y GET /api/users es admin-only en
   // el servidor — no tiene sentido dispararla para el resto.
@@ -194,7 +196,7 @@ function TaskCardImpl({ task, onComplete, onDelete, onUpdate, onDuplicate }: Tas
               >
                 {isRunning ? <Square className="h-3 w-3 fill-current" /> : <Play className="h-3 w-3" />}
                 {isRunning && (
-                  <ElapsedLabel className="text-[10px] font-mono tabular-nums" />
+                  <ElapsedLabel startedAt={entradaEnCurso?.startedAt} className="text-[10px] font-mono tabular-nums" />
                 )}
               </Button>
 

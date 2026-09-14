@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { randomUUID } from "node:crypto";
-import { storage } from "./storage";
+import { storage, MAX_RUNNING_TIMERS } from "./storage";
 import { requireAuth, requireAdmin, getScope } from "./auth";
 import { diffLog, describeAction } from "./audit";
 import { insertTaskSchema, updateTaskSchema, insertQuickTaskSchema, updateQuickTaskSchema } from "@shared/schema";
@@ -497,6 +497,14 @@ export async function registerRoutes(
 
   // Qué está corriendo ahora. Sirve para restaurar el estado al abrir la app
   // en otro dispositivo: el cronómetro vive en la base, no en el navegador.
+  // Lo que esta corriendo ahora: hasta 3 entradas a la vez.
+  app.get("/api/timer/running", requireAuth, async (req, res) => {
+    const scope = getScope(req);
+    res.json(await storage.getRunningEntries(scope.userId));
+  });
+
+  // Se queda por compatibilidad: un navegador con el bundle viejo cacheado
+  // sigue pidiendo esto y espera UN objeto (o null), no una lista.
   app.get("/api/timer/current", requireAuth, async (req, res) => {
     const scope = getScope(req);
     const entry = await storage.getRunningEntry(scope.userId);
@@ -517,37 +525,56 @@ export async function registerRoutes(
       ?? (await storage.getQuickTaskById(id));
     if (!task) return res.status(404).json({ message: "Task not found" });
 
-    const { started, stopped } = await storage.startTimer(id, scope.userId, req.body?.source || "UI");
+    const r = await storage.startTimer(id, scope.userId, req.body?.source || "UI");
 
-    await storage.createLog({
-      action: "TIMER_START",
-      details: `Cronómetro iniciado en #${id}`,
-      taskId: id,
-      userId: scope.userId,
-      source: req.body?.source || "UI",
-    });
+    // 409 y no 400: no es que el pedido este mal armado, es que el estado
+    // actual no lo permite. El cliente lo usa para avisar sin ensuciar la
+    // pantalla con un error generico.
+    if (r.limitReached) {
+      return res.status(409).json({
+        message: `Ya tenés ${r.running.length} tareas corriendo (máximo ${MAX_RUNNING_TIMERS}). Pará alguna antes de arrancar otra.`,
+        running: r.running,
+      });
+    }
 
-    res.json({ started, stopped: stopped ?? null });
+    // Si ya estaba corriendo no se loguea de nuevo: seria un TIMER_START
+    // fantasma en el historial por cada doble click.
+    if (!r.already) {
+      await storage.createLog({
+        action: "TIMER_START",
+        details: `Cronómetro iniciado en #${id}`,
+        taskId: id,
+        userId: scope.userId,
+        source: req.body?.source || "UI",
+      });
+    }
+
+    // `stopped` va en null fijo por los bundles viejos, que leen esa clave
+    // para avisar "pause la anterior": ahora no se pausa nada al arrancar.
+    res.json({ started: r.started, stopped: null, running: r.running });
   });
 
+  // Sin `taskId` para TODOS los cronometros del usuario (el stop general de
+  // la barra de arriba); con `taskId`, solo ese.
   app.post("/api/timer/stop", requireAuth, writeRateLimit, async (req, res) => {
     const scope = getScope(req);
-    const stopped = await storage.stopTimer(scope.userId);
-    if (!stopped) return res.json(null);
+    const taskId = typeof req.body?.taskId === "number" ? req.body.taskId : undefined;
+    const stopped = await storage.stopTimers(scope.userId, taskId);
 
-    const secs = stopped.endedAt
-      ? Math.round((new Date(stopped.endedAt).getTime() - new Date(stopped.startedAt).getTime()) / 1000)
-      : 0;
+    for (const e of stopped) {
+      const secs = e.endedAt
+        ? Math.round((new Date(e.endedAt).getTime() - new Date(e.startedAt).getTime()) / 1000)
+        : 0;
+      await storage.createLog({
+        action: "TIMER_STOP",
+        details: `Cronómetro detenido en #${e.taskId} (${Math.round(secs / 60)} min)`,
+        taskId: e.taskId,
+        userId: scope.userId,
+        source: req.body?.source || "UI",
+      });
+    }
 
-    await storage.createLog({
-      action: "TIMER_STOP",
-      details: `Cronómetro detenido en #${stopped.taskId} (${Math.round(secs / 60)} min)`,
-      taskId: stopped.taskId,
-      userId: scope.userId,
-      source: req.body?.source || "UI",
-    });
-
-    res.json(stopped);
+    res.json({ stopped });
   });
 
   app.get("/api/tasks/:id/time-entries", requireAuth, async (req, res) => {

@@ -50,18 +50,19 @@ function iconoDe(nombre: string | null): LucideIcon {
  * los tres botones se re-renderizarian cada segundo. Asi solo late el numero
  * del que esta corriendo.
  */
-function TotalDeHoy({ base, corriendo }: { base: number; corriendo: boolean }) {
-  const elapsed = useElapsed();
+function TotalDeHoy({ base, startedAt }: { base: number; startedAt?: string | null }) {
+  const elapsed = useElapsed(startedAt);
   return (
     <span className="tabular-nums">
-      {formatElapsed(base + (corriendo ? elapsed : 0))}
+      {formatElapsed(base + elapsed)}
     </span>
   );
 }
 
 function BotonAtajo({ tarea }: { tarea: QuickTask }) {
-  const { running, isBusy, toggle } = useTimer();
-  const corriendo = running?.taskId === tarea.id;
+  const { entryFor, isBusy, toggle } = useTimer();
+  const entrada = entryFor(tarea.id);
+  const corriendo = !!entrada;
   const Icono = iconoDe(tarea.icon);
 
   return (
@@ -85,7 +86,7 @@ function BotonAtajo({ tarea }: { tarea: QuickTask }) {
         : <Icono className="w-3.5 h-3.5 shrink-0 opacity-70" />}
       <span className="truncate max-w-[130px]">{tarea.text}</span>
       <span className={cn('shrink-0 font-bold', !corriendo && 'text-muted-foreground')}>
-        <TotalDeHoy base={tarea.todaySeconds} corriendo={corriendo} />
+        <TotalDeHoy base={tarea.todaySeconds} startedAt={entrada?.startedAt} />
       </span>
       {corriendo
         ? <Square className="w-3 h-3 shrink-0" />
